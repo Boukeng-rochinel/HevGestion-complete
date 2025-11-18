@@ -1,0 +1,367 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ========== CORE ENTITIES ==========
+model User {
+  id        String   @id @default(uuid())
+  email     String?  @unique
+  phoneCountryCode String?
+  phoneNumber String? @unique
+  password  String
+  firstName String
+  lastName  String
+  role      UserRole
+  isActive  Boolean  @default(true)
+
+  // OTP verification fields
+  otpCode      String?
+  otpExpiry    DateTime?
+  isVerified   Boolean  @default(false)
+
+  // Password reset fields
+  resetToken      String?
+  resetTokenExpiry DateTime?
+
+  // User's folders and assignments
+  ownedFolders    Folder[]           @relation("FolderOwner")
+  assignedFolders FolderAssignment[]
+
+  // Add this relation for clients created by this user
+  createdClients Client[]            @relation("ClientCreator")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
+
+model Client {
+  id        String   @id @default(cuid())
+  name      String
+  legalForm LegalForm // Changed from String to enum
+  taxNumber String?
+  address   String?
+  city      String?
+  phone     String?
+  country   CountrySelection
+  currency  String
+  createdBy String   // Links to User id
+  
+  // Add relation to User for createdBy
+  creator   User?    @relation("ClientCreator", fields: [createdBy], references: [id])
+  
+  folders   Folder[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@map("clients")
+}
+
+model Folder {
+  id          String       @id @default(uuid())
+  name        String
+  description String?
+  status      FolderStatus @default(DRAFT)
+  isActive    Boolean      @default(false) // Indicates if this is the active folder for the client
+
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id])
+
+  ownerId String
+  owner   User   @relation("FolderOwner", fields: [ownerId], references: [id])
+
+  // Financial period
+  fiscalYear Int      // 2024, 2025
+  startDate  DateTime
+  endDate    DateTime
+
+  // Balance data
+  balances        Balance[]
+  dsf             DSF?
+  taxDeclarations TaxDeclaration[]
+
+  // Sharing
+  assignments FolderAssignment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("folders")
+}
+
+model FolderAssignment {
+  id       String         @id @default(uuid())
+  folderId String
+  userId   String
+  role     AssignmentRole @default(VIEWER)
+  
+  folder Folder @relation(fields: [folderId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+  
+  assignedAt DateTime @default(now())
+  
+  @@unique([folderId, userId])
+  @@map("folder_assignments")
+}
+
+// ========== BALANCE MANAGEMENT ==========
+model Balance {
+  id     String      @id @default(uuid())
+  type   BalanceType // N or N-1
+  period String      // "2024", "2023"
+  
+  folderId String
+  folder   Folder @relation(fields: [folderId], references: [id])
+  
+  // File information
+  fileName     String
+  filePath     String?
+  originalData Json? // Raw imported data
+  
+  // Processing status
+  status           BalanceStatus @default(PENDING)
+  validationErrors String?
+  
+  // Processing results
+  equilibrium   BalanceEquilibrium?
+  accountIssues AccountIssue[]
+  fixedAssets   FixedAsset[]
+  
+  importedAt  DateTime?  @default(now())
+  processedAt DateTime?
+  
+  @@map("balances")
+}
+
+model BalanceEquilibrium {
+  id        String @id @default(uuid())
+  balanceId String @unique
+  balance   Balance @relation(fields: [balanceId], references: [id])
+  
+  openingDebit   Float
+  openingCredit  Float
+  movementDebit  Float
+  movementCredit Float
+  closingDebit   Float
+  closingCredit  Float
+  
+  isBalanced Boolean
+  anomalies  String?
+  
+  @@map("balance_equilibriums")
+}
+
+model AccountIssue {
+  id        String    @id @default(uuid())
+  balanceId String
+  balance   Balance   @relation(fields: [balanceId], references: [id])
+  
+  accountNumber String
+  accountName   String
+  issueType     IssueType
+  description   String
+  severity      Severity  @default(WARNING)
+  
+  // Resolution
+  isResolved Boolean   @default(false)
+  resolvedAt DateTime?
+  resolution String?
+  
+  @@map("account_issues")
+}
+
+model FixedAsset {
+  id        String  @id @default(uuid())
+  balanceId String
+  balance   Balance @relation(fields: [balanceId], references: [id])
+  
+  accountNumber String
+  accountName   String
+  grossValue    Float
+  netValue      Float?
+  depreciation  Float?
+  
+  movementType  AssetMovementType?
+  activityType  ActivityType?
+  specifications Json? // Additional specifications
+  
+  @@map("fixed_assets")
+}
+
+// ========== DSF & TAX MANAGEMENT ==========
+model DSF {
+  id       String    @id @default(uuid())
+  folderId String    @unique
+  folder   Folder    @relation(fields: [folderId], references: [id])
+  status   DSFStatus @default(DRAFT)
+  
+  // DSF Sheets
+  balanceSheet    Json?
+  incomeStatement Json?
+  taxTables       Json?
+  notes           Json? // Notes 1-35+
+  signaletics     Json? // R1, R2, R3, R4, R4bis
+  
+  // Controls
+  coherenceControl CoherenceControl?
+  lastGeneratedAt  DateTime?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@map("dsf")
+}
+
+model CoherenceControl {
+  id    String @id @default(uuid())
+  dsfId String @unique
+  dsf   DSF    @relation(fields: [dsfId], references: [id])
+  
+  performedAt DateTime @default(now())
+  isCoherent  Boolean
+  issues      Json? // Coherence issues found
+  reportPath  String? // Path to report
+  
+  @@map("coherence_controls")
+}
+
+model TaxDeclaration {
+  id       String            @id @default(uuid())
+  folderId String
+  folder   Folder            @relation(fields: [folderId], references: [id])
+  
+  type   TaxType
+  period String // "2024", "2024-Q1", "2024-01"
+  dueDate DateTime
+  status DeclarationStatus @default(PENDING)
+  
+  // E-declaration
+  niuNumber   String?
+  apiPassword String? // Encrypted
+  dsfId       String? // DSF identifier
+  
+  // Financials
+  amountDue  Float?
+  amountPaid Float?
+  filedAt    DateTime?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@map("tax_declarations")
+}
+
+// ========== ENUMS ==========
+enum UserRole {
+  ASSISTANT
+  COMPTABLE
+  ADMIN
+}
+
+// CORRECTED CountrySelection to match your frontend
+enum CountrySelection {
+  BJ  // Bénin
+  BF  // Burkina Faso
+  CI  // Côte d'Ivoire
+  SN  // Sénégal
+  CM  // Cameroun
+  TG  // Togo
+}
+
+enum LegalForm {
+  SARL
+  SA
+  SUARL
+  INDIVIDUAL
+  OTHER
+}
+
+enum FolderStatus {
+  DRAFT
+  PROCESSING_BALANCE
+  BALANCE_READY
+  DSF_GENERATED
+  DSF_VALIDATED
+  COMPLETED
+}
+
+enum AssignmentRole {
+  VIEWER
+  EDITOR
+  MANAGER
+}
+
+enum BalanceType {
+  CURRENT_YEAR  // N
+  PREVIOUS_YEAR // N-1
+}
+
+enum BalanceStatus {
+  PENDING
+  VALIDATING
+  VALID
+  INVALID
+  PROCESSING
+  PROCESSED
+}
+
+enum IssueType {
+  NON_COMPLIANT_ACCOUNT
+  WRONG_BALANCE_POSITION
+  MISSING_SPECIFICATION
+  EQUILIBRIUM_ERROR
+  FIXED_ASSET_ISSUE
+}
+
+enum Severity {
+  INFO
+  WARNING
+  ERROR
+  BLOCKING
+}
+
+enum AssetMovementType {
+  ACQUISITION
+  DISPOSAL
+  TRANSFER
+  REVALUATION
+}
+
+enum ActivityType {
+  ORDINARY
+  EXTRAORDINARY
+}
+
+enum DSFStatus {
+  DRAFT
+  GENERATING
+  GENERATED
+  VALIDATING
+  VALID
+  EXPORTED
+}
+
+enum TaxType {
+  TVA
+  CNPS
+  IS
+  ACCOUNTING
+  DSF
+}
+
+enum DeclarationStatus {
+  PENDING
+  CONFIGURED
+  IN_PROGRESS
+  DECLARED
+  PAID
+  LATE
+}
