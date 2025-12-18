@@ -16,6 +16,12 @@ router.post(
   validate(createExerciseSchema),
   folderController.createFolder
 );
+router.post(
+  "/:id/duplicate",
+  authenticate,
+  validate(createExerciseSchema),
+  folderController.duplicateFolder
+);
 router.put("/:id/close", authenticate, folderController.closeFolder);
 router.put("/:id", authenticate, folderController.updateFolder);
 

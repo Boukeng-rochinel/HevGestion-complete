@@ -40,15 +40,29 @@ CREATE TYPE "TaxType" AS ENUM ('TVA', 'CNPS', 'IS', 'ACCOUNTING', 'DSF');
 -- CreateEnum
 CREATE TYPE "DeclarationStatus" AS ENUM ('PENDING', 'CONFIGURED', 'IN_PROGRESS', 'DECLARED', 'PAID', 'LATE');
 
+-- CreateEnum
+CREATE TYPE "ConfigScope" AS ENUM ('GLOBAL', 'EXERCISE', 'CLIENT');
+
+-- CreateEnum
+CREATE TYPE "ConfigOwnerType" AS ENUM ('SYSTEM', 'ACCOUNTANT', 'ADMIN');
+
 -- CreateTable
 CREATE TABLE "users" (
     "id" TEXT NOT NULL,
-    "email" TEXT NOT NULL,
+    "email" TEXT,
+    "phoneCountryCode" TEXT,
+    "phoneNumber" TEXT,
     "password" TEXT NOT NULL,
     "firstName" TEXT NOT NULL,
     "lastName" TEXT NOT NULL,
     "role" "UserRole" NOT NULL,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "maxAssistants" INTEGER NOT NULL DEFAULT 0,
+    "otpCode" TEXT,
+    "otpExpiry" TIMESTAMP(3),
+    "isVerified" BOOLEAN NOT NULL DEFAULT false,
+    "resetToken" TEXT,
+    "resetTokenExpiry" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -216,8 +230,90 @@ CREATE TABLE "tax_declarations" (
     CONSTRAINT "tax_declarations_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "dsf_configs" (
+    "id" TEXT NOT NULL,
+    "category" TEXT NOT NULL,
+    "description" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "dsf_configs_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "dsf_comptable_configs" (
+    "id" TEXT NOT NULL,
+    "configId" TEXT NOT NULL,
+    "ownerId" TEXT NOT NULL,
+    "ownerType" "ConfigOwnerType" NOT NULL DEFAULT 'ACCOUNTANT',
+    "codeDsf" TEXT NOT NULL,
+    "libelle" TEXT NOT NULL,
+    "operations" TEXT[],
+    "destinationCell" TEXT,
+    "scope" "ConfigScope" NOT NULL DEFAULT 'EXERCISE',
+    "clientId" TEXT,
+    "exerciseId" TEXT,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "isLocked" BOOLEAN NOT NULL DEFAULT false,
+    "isModified" BOOLEAN NOT NULL DEFAULT false,
+    "baseConfigId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "dsf_comptable_configs_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "dsf_system_configs" (
+    "id" TEXT NOT NULL,
+    "configId" TEXT NOT NULL,
+    "codeDsf" TEXT NOT NULL,
+    "libelle" TEXT NOT NULL,
+    "operations" TEXT[],
+    "destinationCell" TEXT,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "isLocked" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "dsf_system_configs_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "dsf_config_imports" (
+    "id" TEXT NOT NULL,
+    "fileName" TEXT NOT NULL,
+    "filePath" TEXT,
+    "importedBy" TEXT NOT NULL,
+    "totalConfigs" INTEGER NOT NULL DEFAULT 0,
+    "importedConfigs" INTEGER NOT NULL DEFAULT 0,
+    "failedConfigs" INTEGER NOT NULL DEFAULT 0,
+    "errors" TEXT,
+    "importedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "dsf_config_imports_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "dgi_configs" (
+    "id" TEXT NOT NULL,
+    "companyName" TEXT NOT NULL,
+    "niu" TEXT NOT NULL,
+    "username" TEXT NOT NULL,
+    "password" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "dgi_configs_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "users_email_key" ON "users"("email");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "users_phoneNumber_key" ON "users"("phoneNumber");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "folder_assignments_folderId_userId_key" ON "folder_assignments"("folderId", "userId");
@@ -230,6 +326,42 @@ CREATE UNIQUE INDEX "dsf_folderId_key" ON "dsf"("folderId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "coherence_controls_dsfId_key" ON "coherence_controls"("dsfId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "dsf_configs_category_key" ON "dsf_configs"("category");
+
+-- CreateIndex
+CREATE INDEX "dsf_comptable_configs_configId_idx" ON "dsf_comptable_configs"("configId");
+
+-- CreateIndex
+CREATE INDEX "dsf_comptable_configs_ownerId_idx" ON "dsf_comptable_configs"("ownerId");
+
+-- CreateIndex
+CREATE INDEX "dsf_comptable_configs_ownerType_idx" ON "dsf_comptable_configs"("ownerType");
+
+-- CreateIndex
+CREATE INDEX "dsf_comptable_configs_codeDsf_idx" ON "dsf_comptable_configs"("codeDsf");
+
+-- CreateIndex
+CREATE INDEX "dsf_comptable_configs_scope_idx" ON "dsf_comptable_configs"("scope");
+
+-- CreateIndex
+CREATE INDEX "dsf_comptable_configs_exerciseId_idx" ON "dsf_comptable_configs"("exerciseId");
+
+-- CreateIndex
+CREATE INDEX "dsf_comptable_configs_clientId_idx" ON "dsf_comptable_configs"("clientId");
+
+-- CreateIndex
+CREATE INDEX "dsf_comptable_configs_isActive_idx" ON "dsf_comptable_configs"("isActive");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "dsf_comptable_configs_configId_ownerId_ownerType_codeDsf_sc_key" ON "dsf_comptable_configs"("configId", "ownerId", "ownerType", "codeDsf", "scope", "clientId", "exerciseId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "dsf_system_configs_configId_key" ON "dsf_system_configs"("configId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "dgi_configs_userId_key" ON "dgi_configs"("userId");
 
 -- AddForeignKey
 ALTER TABLE "clients" ADD CONSTRAINT "clients_createdBy_fkey" FOREIGN KEY ("createdBy") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -266,3 +398,21 @@ ALTER TABLE "coherence_controls" ADD CONSTRAINT "coherence_controls_dsfId_fkey" 
 
 -- AddForeignKey
 ALTER TABLE "tax_declarations" ADD CONSTRAINT "tax_declarations_folderId_fkey" FOREIGN KEY ("folderId") REFERENCES "folders"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "dsf_comptable_configs" ADD CONSTRAINT "dsf_comptable_configs_configId_fkey" FOREIGN KEY ("configId") REFERENCES "dsf_configs"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "dsf_comptable_configs" ADD CONSTRAINT "dsf_comptable_configs_ownerId_fkey" FOREIGN KEY ("ownerId") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "dsf_comptable_configs" ADD CONSTRAINT "dsf_comptable_configs_exerciseId_fkey" FOREIGN KEY ("exerciseId") REFERENCES "folders"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "dsf_system_configs" ADD CONSTRAINT "dsf_system_configs_configId_fkey" FOREIGN KEY ("configId") REFERENCES "dsf_configs"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "dsf_config_imports" ADD CONSTRAINT "dsf_config_imports_importedBy_fkey" FOREIGN KEY ("importedBy") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "dgi_configs" ADD CONSTRAINT "dgi_configs_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

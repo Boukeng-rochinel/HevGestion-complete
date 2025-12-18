@@ -14,6 +14,7 @@ import {
   ConflictError,
 } from "../lib/errors";
 import { Validators } from "../utils/validators";
+import { auditService } from "../services/audit.service";
 
 // Import the AuthRequest interface from middleware
 import { AuthRequest } from "../middleware/auth.middleware";
@@ -32,6 +33,7 @@ class AuthController {
         firstName,
         lastName,
         role,
+        maxAssistants,
       } = req.body;
 
       // Check if user exists by email or phone
@@ -74,6 +76,7 @@ class AuthController {
 
       const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
+      // implementation of deleting the user info after a certain delay if the user doesn't successfully verified his/her account
       // Create user with OTP (not verified yet)
       const user = await prisma.user.create({
         data: {
@@ -84,6 +87,7 @@ class AuthController {
           firstName,
           lastName,
           role: userRole,
+          maxAssistants: role === "COMPTABLE" ? maxAssistants || 0 : 0,
           isActive: false, // User is not active until OTP verification
           otpCode,
           otpExpiry,
@@ -97,7 +101,7 @@ class AuthController {
 
       res.status(201).json({
         message:
-          "Registration initiated. Please verify your phone number with the OTP sent.",
+          "Un code de vérification a été envoyé à votre numéro de téléphone ",
         user: {
           id: user.id,
           email: user.email,
@@ -164,7 +168,7 @@ class AuthController {
         secure: isProduction,
         sameSite: isProduction ? ("strict" as const) : ("lax" as const),
         domain: isProduction ? undefined : "localhost",
-        maxAge: 15 * 60 * 1000, // 15 minutes for access token
+        maxAge: 4 * 60 * 60 * 1000, // 4 hours for access token
       };
 
       const refreshCookieOptions = {
@@ -172,11 +176,18 @@ class AuthController {
         secure: isProduction,
         sameSite: isProduction ? ("strict" as const) : ("lax" as const),
         domain: isProduction ? undefined : "localhost",
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days for refresh token
+        // No maxAge set - expires on tab close for refresh token
       };
 
       res.cookie("accessToken", accessToken, cookieOptions);
       res.cookie("refreshToken", refreshToken, refreshCookieOptions);
+
+      // Log successful login
+      await auditService.logUserLogin(user.id, {
+        ipAddress: req.ip,
+        userAgent: req.get("User-Agent"),
+        phoneNumber: user.phoneNumber,
+      });
 
       res.json({
         message: "Login successful",
@@ -235,7 +246,7 @@ class AuthController {
         secure: isProduction,
         sameSite: isProduction ? ("strict" as const) : ("lax" as const), // Allow cross-origin in development
         domain: isProduction ? undefined : "localhost", // Allow sharing between localhost ports
-        maxAge: 15 * 60 * 1000, // 15 minutes for access token
+        maxAge: 4 * 60 * 60 * 1000, // 4 hours for access token
       };
 
       const refreshCookieOptions = {
@@ -243,7 +254,7 @@ class AuthController {
         secure: isProduction,
         sameSite: isProduction ? ("strict" as const) : ("lax" as const), // Allow cross-origin in development
         domain: isProduction ? undefined : "localhost", // Allow sharing between localhost ports
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days for refresh token
+        // No maxAge set - expires on tab close for refresh token
       };
 
       res.cookie("accessToken", newAccessToken, cookieOptions);
@@ -319,14 +330,14 @@ class AuthController {
         httpOnly: true,
         secure: isProduction,
         sameSite: isProduction ? ("strict" as const) : ("lax" as const), // Allow cross-origin in development
-        maxAge: 15 * 60 * 1000, // 15 minutes for access token
+        maxAge: 4 * 60 * 60 * 1000, // 4 hours for access token
       };
 
       const refreshCookieOptions = {
         httpOnly: true,
         secure: isProduction,
         sameSite: isProduction ? ("strict" as const) : ("lax" as const), // Allow cross-origin in development
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days for refresh token
+        // No maxAge set - expires on tab close for refresh token
       };
 
       res.cookie("accessToken", accessToken, cookieOptions);
@@ -350,8 +361,16 @@ class AuthController {
     }
   }
 
-  async logout(req: Request, res: Response, next: NextFunction) {
+  async logout(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
+      // Log logout action if user is authenticated
+      if (req.user?.userId) {
+        await auditService.logUserLogout(req.user.userId, {
+          ipAddress: req.ip,
+          userAgent: req.get("User-Agent"),
+        });
+      }
+
       // Clear HttpOnly cookies
       res.clearCookie("accessToken");
       res.clearCookie("refreshToken");
@@ -500,9 +519,11 @@ class AuthController {
           firstName: userWithoutSensitiveData.firstName,
           lastName: userWithoutSensitiveData.lastName,
           email: userWithoutSensitiveData.email,
-
+          phoneCountryCode: userWithoutSensitiveData.phoneCountryCode,
+          phoneNumber: userWithoutSensitiveData.phoneNumber,
           role: userWithoutSensitiveData.role,
           isActive: userWithoutSensitiveData.isActive,
+          maxAssistants: userWithoutSensitiveData.maxAssistants,
           // Return all clients as an array
           clients: userWithoutSensitiveData.createdClients.map((client) => ({
             id: client.id,

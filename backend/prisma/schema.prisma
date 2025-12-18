@@ -1,4 +1,4 @@
-// prisma/schema.prisma
+// prisma/schema.prisma - VERSION CORRIGÉE
 generator client {
   provider = "prisma-client-js"
 }
@@ -20,6 +20,9 @@ model User {
   role      UserRole
   isActive  Boolean  @default(true)
 
+  // Assistant management for COMPTABLE users
+  maxAssistants Int @default(0)
+
   // OTP verification fields
   otpCode      String?
   otpExpiry    DateTime?
@@ -36,6 +39,21 @@ model User {
   // Add this relation for clients created by this user
   createdClients Client[]            @relation("ClientCreator")
 
+  // DSF Config imports
+  dsfConfigImports DSFConfigImport[]
+
+  // DGI Configuration
+  dgiConfig DGIConfig?
+
+  // DSF Configurations
+  dsfComptableConfigs DSFComptableConfig[]
+
+  // DSF reports managed by this user
+  managedDSFs DSF[]
+
+  // Audit logs
+  auditLogs AuditLog[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -45,7 +63,7 @@ model User {
 model Client {
   id        String   @id @default(cuid())
   name      String
-  legalForm LegalForm // Changed from String to enum
+  legalForm LegalForm
   taxNumber String?
   address   String?
   city      String?
@@ -58,10 +76,13 @@ model Client {
   creator   User?    @relation("ClientCreator", fields: [createdBy], references: [id])
   
   folders   Folder[]
-  
+
+  // Audit logs
+  auditLogs AuditLog[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  
+
   @@map("clients")
 }
 
@@ -70,7 +91,7 @@ model Folder {
   name        String
   description String?
   status      FolderStatus @default(DRAFT)
-  isActive    Boolean      @default(false) // Indicates if this is the active folder for the client
+  isActive    Boolean      @default(false)
 
   clientId String
   client   Client @relation(fields: [clientId], references: [id])
@@ -88,8 +109,14 @@ model Folder {
   dsf             DSF?
   taxDeclarations TaxDeclaration[]
 
+  // DSF Configurations
+  dsfComptableConfigs DSFComptableConfig[]
+
   // Sharing
   assignments FolderAssignment[]
+
+  // Audit logs
+  auditLogs AuditLog[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -202,22 +229,162 @@ model DSF {
   folderId String    @unique
   folder   Folder    @relation(fields: [folderId], references: [id])
   status   DSFStatus @default(DRAFT)
-  
-  // DSF Sheets
+
+  // Direct user relationship for convenience (comptable who manages this DSF)
+  userId   String?
+  user     User?     @relation(fields: [userId], references: [id])
+
+  // LEGACY JSON FIELDS - Keep for backward compatibility during migration
   balanceSheet    Json?
   incomeStatement Json?
   taxTables       Json?
   notes           Json? // Notes 1-35+
   signaletics     Json? // R1, R2, R3, R4, R4bis
-  
+
+  // NEW STRUCTURED TABLES - For better management
+  structuredNotes       DSFNotes[]
+  structuredSignaletics DSFSignaletics[]
+  structuredBalanceSheets   DSFBalanceSheet[]
+  structuredIncomeStatements DSFIncomeStatement[]
+  structuredTaxTables       DSFTaxTable[]
+
   // Controls
   coherenceControl CoherenceControl?
   lastGeneratedAt  DateTime?
-  
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  
+
   @@map("dsf")
+}
+
+// Individual DSF Notes (Note1, Note2, ..., Note10)
+model DSFNotes {
+  id          String   @id @default(uuid())
+  dsfId       String
+  dsf         DSF      @relation(fields: [dsfId], references: [id], onDelete: Cascade)
+
+  noteType    DSFNoteType // NOTE1, NOTE2, etc.
+  version     Int      @default(1) // For versioning
+
+  // Structured data instead of JSON
+  headerInfo  Json? // Entity info, fiscal year, etc.
+  debts       Json? // Financial debts data
+  commitments Json? // Financial commitments
+  comment     String?
+
+  // Metadata
+  isActive    Boolean  @default(true)
+  createdBy   String   // User ID
+  updatedBy   String?  // User ID
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([dsfId, noteType, version])
+  @@index([dsfId, noteType])
+  @@map("dsf_notes")
+}
+
+// DSF Signaletics (Fiches R1, R2, R3, R4, R4bis)
+model DSFSignaletics {
+  id          String   @id @default(uuid())
+  dsfId       String
+  dsf         DSF      @relation(fields: [dsfId], references: [id], onDelete: Cascade)
+
+  ficheType   DSFFicheType // R1, R2, R3, R4, R4BIS
+  version     Int      @default(1) // For versioning
+
+  // Structured data instead of JSON
+  data        Json? // Fiche-specific structured data
+
+  // Metadata
+  isActive    Boolean  @default(true)
+  createdBy   String   // User ID
+  updatedBy   String?  // User ID
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([dsfId, ficheType, version])
+  @@index([dsfId, ficheType])
+  @@map("dsf_signaletics")
+}
+
+// DSF Balance Sheet
+model DSFBalanceSheet {
+  id          String   @id @default(uuid())
+  dsfId       String
+  dsf         DSF      @relation(fields: [dsfId], references: [id], onDelete: Cascade)
+
+  version     Int      @default(1)
+
+  // Structured balance sheet data
+  assets      Json? // Actif data
+  liabilities Json? // Passif data
+
+  // Metadata
+  isActive    Boolean  @default(true)
+  createdBy   String   // User ID
+  updatedBy   String?  // User ID
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([dsfId, version])
+  @@index([dsfId])
+  @@map("dsf_balance_sheets")
+}
+
+// DSF Income Statement
+model DSFIncomeStatement {
+  id          String   @id @default(uuid())
+  dsfId       String
+  dsf         DSF      @relation(fields: [dsfId], references: [id], onDelete: Cascade)
+
+  version     Int      @default(1)
+
+  // Structured income statement data
+  revenues    Json? // Products data
+  expenses    Json? // Charges data
+  result      Json? // Result data
+
+  // Metadata
+  isActive    Boolean  @default(true)
+  createdBy   String   // User ID
+  updatedBy   String?  // User ID
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([dsfId, version])
+  @@index([dsfId])
+  @@map("dsf_income_statements")
+}
+
+// DSF Tax Tables
+model DSFTaxTable {
+  id          String   @id @default(uuid())
+  dsfId       String
+  dsf         DSF      @relation(fields: [dsfId], references: [id], onDelete: Cascade)
+
+  tableType   DSFTaxTableType // TVA, IS, etc.
+  version     Int      @default(1)
+
+  // Structured tax table data
+  data        Json?
+
+  // Metadata
+  isActive    Boolean  @default(true)
+  createdBy   String   // User ID
+  updatedBy   String?  // User ID
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([dsfId, tableType, version])
+  @@index([dsfId, tableType])
+  @@map("dsf_tax_tables")
 }
 
 model CoherenceControl {
@@ -259,6 +426,169 @@ model TaxDeclaration {
   @@map("tax_declarations")
 }
 
+// ========== DSF CONFIGURATION MANAGEMENT ==========
+model DSFConfig {
+  id          String @id @default(uuid())
+  category    String @unique // note1, note2, etc. - unique per category
+  description String? // Description optionnelle
+
+  // Relations to comptable and system configs
+  comptableConfigs DSFComptableConfig[]
+  systemConfig     DSFSystemConfig?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("dsf_configs")
+}
+
+model DSFComptableConfig {
+  id          String @id @default(uuid())
+  configId    String
+  config      DSFConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+
+  // Owner information - FIXED: Added relation to User
+  ownerId     String // User ID
+  owner       User   @relation(fields: [ownerId], references: [id]) // Added this line
+  ownerType   ConfigOwnerType @default(ACCOUNTANT)
+
+  // Configuration details
+  codeDsf     String
+  libelle     String
+  operations  String[]
+  destinationCell String?
+
+  // Scope and settings
+  scope       ConfigScope @default(EXERCISE)
+  clientId    String?
+  exerciseId  String?
+  folder      Folder?     @relation(fields: [exerciseId], references: [id])
+
+  // Status
+  isActive    Boolean @default(true)
+  isLocked    Boolean @default(false)
+  isModified  Boolean @default(false)
+  baseConfigId String? // Référence à la config système d'origine
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Ajouter des index pour la performance
+  @@index([configId])
+  @@index([ownerId])
+  @@index([ownerType])
+  @@index([codeDsf])
+  @@index([scope])
+  @@index([exerciseId])
+  @@index([clientId])
+  @@index([isActive])
+
+  // Constrainte unique plus flexible qui permet plusieurs configs SYSTEM
+  // pour le même utilisateur
+  @@unique([configId, ownerId, ownerType, codeDsf, scope, clientId, exerciseId], name: "comptable_config_full_unique")
+
+  @@map("dsf_comptable_configs")
+}
+
+model DSFSystemConfig {
+  id          String @id @default(uuid())
+  configId    String @unique
+  config      DSFConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+
+  // Configuration details
+  codeDsf     String
+  libelle     String
+  operations  String[]
+  destinationCell String?
+
+  // Status
+  isActive    Boolean @default(true)
+  isLocked    Boolean @default(true) // System configs are always locked
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("dsf_system_configs")
+}
+
+// ========== DSF CONFIG IMPORT/EXPORT ==========
+model DSFConfigImport {
+  id          String   @id @default(uuid())
+  fileName    String
+  filePath    String?
+  importedBy  String   // User ID
+  importer    User     @relation(fields: [importedBy], references: [id])
+
+  // Import results
+  totalConfigs Int      @default(0)
+  importedConfigs Int   @default(0)
+  failedConfigs Int     @default(0)
+  errors      String?
+
+  importedAt  DateTime @default(now())
+
+  @@map("dsf_config_imports")
+}
+
+// ========== DGI DECLARATION MANAGEMENT ==========
+model DGIConfig {
+  id          String @id @default(uuid())
+  companyName String
+  niu         String
+  username    String
+  password    String // Should be encrypted in production
+  userId      String @unique
+
+  user User @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("dgi_configs")
+}
+
+// ========== AUDIT & HISTORY MANAGEMENT ==========
+model AuditLog {
+  id          String   @id @default(uuid())
+  timestamp   DateTime @default(now())
+
+  // Who performed the action
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+
+  // What action was performed
+  action      AuditAction
+  entityType  EntityType
+  entityId    String?  // ID of the affected entity (folder, client, etc.)
+
+  // Context information
+  folderId    String?  // Related folder if applicable
+  folder      Folder?  @relation(fields: [folderId], references: [id])
+  clientId    String?  // Related client if applicable
+  client      Client?  @relation(fields: [clientId], references: [id])
+
+  // Action details
+  description String   // Human-readable description
+  oldValue    Json?    // Previous value (for updates)
+  newValue    Json?    // New value (for updates/creations)
+  metadata    Json?    // Additional context (IP, user agent, etc.)
+
+  // Change tracking for Excel modifications
+  cellAddress String?  // Excel cell reference (e.g., "A1", "B12:C15")
+  worksheet   String?  // Excel worksheet name
+  fieldName   String?  // Field name being modified
+  changeType  ChangeType? // Type of change
+
+  @@index([userId])
+  @@index([entityType])
+  @@index([entityId])
+  @@index([folderId])
+  @@index([timestamp])
+  @@index([action])
+
+  @@map("audit_logs")
+}
+
 // ========== ENUMS ==========
 enum UserRole {
   ASSISTANT
@@ -266,7 +596,6 @@ enum UserRole {
   ADMIN
 }
 
-// CORRECTED CountrySelection to match your frontend
 enum CountrySelection {
   BJ  // Bénin
   BF  // Burkina Faso
@@ -349,6 +678,34 @@ enum DSFStatus {
   EXPORTED
 }
 
+enum DSFNoteType {
+  NOTE1
+  NOTE2
+  NOTE3
+  NOTE4
+  NOTE5
+  NOTE6
+  NOTE7
+  NOTE8
+  NOTE9
+  NOTE10
+}
+
+enum DSFFicheType {
+  R1
+  R2
+  R3
+  R4
+  R4BIS
+}
+
+enum DSFTaxTableType {
+  TVA
+  IS
+  IRPP
+  TAXES_DIVERSES
+}
+
 enum TaxType {
   TVA
   CNPS
@@ -364,4 +721,103 @@ enum DeclarationStatus {
   DECLARED
   PAID
   LATE
+}
+
+enum ConfigScope {
+  GLOBAL      // System-wide default
+  EXERCISE    // Per exercise/folder
+  CLIENT      // Per client
+}
+
+enum ConfigOwnerType {
+  SYSTEM      // System default configs
+  ACCOUNTANT  // Accountant-specific configs
+  ADMIN       // Admin-created configs
+}
+
+// ========== AUDIT LOG ENUMS ==========
+enum AuditAction {
+  // User Management
+  USER_LOGIN
+  USER_LOGOUT
+  USER_CREATED
+  USER_UPDATED
+  USER_DELETED
+
+  // Client Management
+  CLIENT_CREATED
+  CLIENT_UPDATED
+  CLIENT_DELETED
+
+  // Folder Management
+  FOLDER_CREATED
+  FOLDER_UPDATED
+  FOLDER_DELETED
+  FOLDER_ASSIGNED
+  FOLDER_UNASSIGNED
+
+  // Balance Management
+  BALANCE_UPLOADED
+  BALANCE_PROCESSED
+  BALANCE_VALIDATED
+  BALANCE_CORRECTED
+
+  // DSF Management
+  DSF_GENERATED
+  DSF_VALIDATED
+  DSF_EXPORTED
+  DSF_UPDATED
+
+  // DSF Configuration
+  DSF_CONFIG_CREATED
+  DSF_CONFIG_UPDATED
+  DSF_CONFIG_DELETED
+  DSF_CONFIG_IMPORTED
+  DSF_CONFIG_EXPORTED
+
+  // Excel Modifications
+  EXCEL_CELL_UPDATED
+  EXCEL_RANGE_UPDATED
+  EXCEL_FORMULA_CHANGED
+  EXCEL_SHEET_ADDED
+  EXCEL_SHEET_DELETED
+
+  // Tax Declaration
+  TAX_DECLARATION_SUBMITTED
+  TAX_DECLARATION_UPDATED
+  TAX_DECLARATION_CANCELLED
+
+  // DGI Configuration
+  DGI_CONFIG_UPDATED
+
+  // System Actions
+  SYSTEM_BACKUP
+  SYSTEM_RESTORE
+  DATA_EXPORT
+  DATA_IMPORT
+}
+
+enum EntityType {
+  USER
+  CLIENT
+  FOLDER
+  BALANCE
+  DSF
+  DSF_CONFIG
+  TAX_DECLARATION
+  DGI_CONFIG
+  EXCEL_CELL
+  EXCEL_SHEET
+  SYSTEM
+}
+
+enum ChangeType {
+  CREATED
+  UPDATED
+  DELETED
+  IMPORTED
+  EXPORTED
+  PROCESSED
+  VALIDATED
+  SUBMITTED
 }

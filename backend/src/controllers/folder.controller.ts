@@ -212,6 +212,62 @@ class FolderController {
       next(error);
     }
   };
+  duplicateFolder = async (
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction
+  ) => {
+    try {
+      const userId = req.user!.userId;
+      const { clientId, fiscalYear, startDate, endDate } = req.body;
+
+      // Check access to client
+      await this.checkClientAccess(userId, clientId, req.user!.role);
+
+      // Check if folder already exists for this year
+      const existingFolder = await prisma.folder.findFirst({
+        where: {
+          clientId,
+          fiscalYear,
+        },
+      });
+
+      if (existingFolder) {
+        throw new BadRequestError(
+          `Folder for year ${fiscalYear} already exists`
+        );
+      }
+
+      const folder = await prisma.folder.create({
+        data: {
+          clientId,
+          ownerId: userId,
+          fiscalYear,
+          startDate: new Date(startDate),
+          endDate: new Date(endDate),
+          status: FolderStatus.DRAFT,
+        },
+        include: {
+          client: true,
+          owner: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+            },
+          },
+        },
+      });
+
+      res.status(201).json({
+        message: "Folder created successfully",
+        folder,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
 
   closeFolder = async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {

@@ -9,6 +9,9 @@ import {
   FolderStatus,
   BalanceStatus,
   BalanceType,
+  DSFNoteType,
+  DSFFicheType,
+  DSFTaxTableType,
 } from "@prisma/client";
 import * as path from "path";
 import * as XLSX from "xlsx";
@@ -19,6 +22,7 @@ type FolderWithFullRelations = {
   name: string;
   description: string | null;
   status: FolderStatus;
+  isActive: boolean;
   clientId: string;
   ownerId: string;
   fiscalYear: number;
@@ -29,13 +33,16 @@ type FolderWithFullRelations = {
   client: {
     id: string;
     name: string;
+    createdAt: Date;
+    updatedAt: Date;
     legalForm: any;
     taxNumber: string | null;
     address: string | null;
     city: string | null;
     phone: string | null;
+    country: any;
     currency: string;
-    createdAt: Date;
+    createdBy: string;
   };
   balances: {
     id: string;
@@ -338,6 +345,238 @@ class DSFController {
       res.json({
         message: "DSF exported successfully",
         downloadUrl: `/api/files/download/${path.basename(filePath)}`,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async updateDSF(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const { id } = req.params;
+      const { notes, signaletics, balanceSheet, incomeStatement, taxTables } =
+        req.body;
+
+      const dsf = await prisma.dSF.findUnique({
+        where: { id },
+        include: {
+          folder: true,
+        },
+      });
+
+      if (!dsf) {
+        throw new NotFoundError("DSF not found");
+      }
+
+      // Verify ownership (check both direct user and folder owner)
+      const userId = req.user?.userId!;
+      if (dsf.userId !== userId && dsf.folder.ownerId !== userId) {
+        throw new BadRequestError(
+          "You don't have permission to update this DSF"
+        );
+      }
+
+      const results: any = {};
+
+      // Update Notes
+      if (notes && typeof notes === "object") {
+        for (const [noteKey, noteData] of Object.entries(notes)) {
+          const noteType = noteKey.toUpperCase() as any; // NOTE1, NOTE2, etc.
+
+          if (noteData && typeof noteData === "object") {
+            const existingNote = await prisma.dSFNotes.findFirst({
+              where: {
+                dsfId: id,
+                noteType: noteType,
+                isActive: true,
+              },
+              orderBy: { version: "desc" },
+            });
+
+            const newVersion = existingNote ? existingNote.version + 1 : 1;
+
+            // Deactivate previous version
+            if (existingNote) {
+              await prisma.dSFNotes.update({
+                where: { id: existingNote.id },
+                data: { isActive: false },
+              });
+            }
+
+            // Create new version
+            const newNote = await prisma.dSFNotes.create({
+              data: {
+                dsfId: id,
+                noteType: noteType,
+                version: newVersion,
+                headerInfo: (noteData as any).headerInfo,
+                debts: (noteData as any).debts,
+                commitments: (noteData as any).commitments,
+                comment: (noteData as any).comment,
+                createdBy: userId,
+                updatedBy: userId,
+              },
+            });
+
+            results.notes = results.notes || {};
+            results.notes[noteKey] = newNote;
+          }
+        }
+      }
+
+      // Update Signaletics (Fiches)
+      if (signaletics && typeof signaletics === "object") {
+        for (const [ficheKey, ficheData] of Object.entries(signaletics)) {
+          const ficheType = ficheKey.toUpperCase() as any; // R1, R2, etc.
+
+          const existingFiche = await prisma.dSFSignaletics.findFirst({
+            where: {
+              dsfId: id,
+              ficheType: ficheType,
+              isActive: true,
+            },
+            orderBy: { version: "desc" },
+          });
+
+          const newVersion = existingFiche ? existingFiche.version + 1 : 1;
+
+          // Deactivate previous version
+          if (existingFiche) {
+            await prisma.dSFSignaletics.update({
+              where: { id: existingFiche.id },
+              data: { isActive: false },
+            });
+          }
+
+          // Create new version
+          const newFiche = await prisma.dSFSignaletics.create({
+            data: {
+              dsfId: id,
+              ficheType: ficheType,
+              version: newVersion,
+              data: ficheData as any,
+              createdBy: userId,
+              updatedBy: userId,
+            },
+          });
+
+          results.signaletics = results.signaletics || {};
+          results.signaletics[ficheKey] = newFiche;
+        }
+      }
+
+      // Update Balance Sheet
+      if (balanceSheet) {
+        const existingBS = await prisma.dSFBalanceSheet.findFirst({
+          where: { dsfId: id, isActive: true },
+          orderBy: { version: "desc" },
+        });
+
+        const newVersion = existingBS ? existingBS.version + 1 : 1;
+
+        if (existingBS) {
+          await prisma.dSFBalanceSheet.update({
+            where: { id: existingBS.id },
+            data: { isActive: false },
+          });
+        }
+
+        const newBS = await prisma.dSFBalanceSheet.create({
+          data: {
+            dsfId: id,
+            version: newVersion,
+            assets: balanceSheet.assets,
+            liabilities: balanceSheet.liabilities,
+            createdBy: userId,
+            updatedBy: userId,
+          },
+        });
+
+        results.balanceSheet = newBS;
+      }
+
+      // Update Income Statement
+      if (incomeStatement) {
+        const existingIS = await prisma.dSFIncomeStatement.findFirst({
+          where: { dsfId: id, isActive: true },
+          orderBy: { version: "desc" },
+        });
+
+        const newVersion = existingIS ? existingIS.version + 1 : 1;
+
+        if (existingIS) {
+          await prisma.dSFIncomeStatement.update({
+            where: { id: existingIS.id },
+            data: { isActive: false },
+          });
+        }
+
+        const newIS = await prisma.dSFIncomeStatement.create({
+          data: {
+            dsfId: id,
+            version: newVersion,
+            revenues: incomeStatement.revenues,
+            expenses: incomeStatement.expenses,
+            result: incomeStatement.result,
+            createdBy: userId,
+            updatedBy: userId,
+          },
+        });
+
+        results.incomeStatement = newIS;
+      }
+
+      // Update Tax Tables
+      if (taxTables && typeof taxTables === "object") {
+        for (const [tableKey, tableData] of Object.entries(taxTables)) {
+          const tableType = tableKey.toUpperCase() as any;
+
+          const existingTable = await prisma.dSFTaxTable.findFirst({
+            where: {
+              dsfId: id,
+              tableType: tableType,
+              isActive: true,
+            },
+            orderBy: { version: "desc" },
+          });
+
+          const newVersion = existingTable ? existingTable.version + 1 : 1;
+
+          if (existingTable) {
+            await prisma.dSFTaxTable.update({
+              where: { id: existingTable.id },
+              data: { isActive: false },
+            });
+          }
+
+          const newTable = await prisma.dSFTaxTable.create({
+            data: {
+              dsfId: id,
+              tableType: tableType,
+              version: newVersion,
+              data: tableData as any,
+              createdBy: userId,
+              updatedBy: userId,
+            },
+          });
+
+          results.taxTables = results.taxTables || {};
+          results.taxTables[tableKey] = newTable;
+        }
+      }
+
+      // Update DSF lastGeneratedAt and userId if not set
+      await prisma.dSF.update({
+        where: { id },
+        data: {
+          lastGeneratedAt: new Date(),
+          userId: dsf.userId || userId, // Set userId if not already set
+        },
+      });
+
+      res.json({
+        message: "DSF updated successfully",
+        results,
       });
     } catch (error) {
       next(error);

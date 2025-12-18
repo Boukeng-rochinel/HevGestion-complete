@@ -43,6 +43,7 @@ router.post(
   dsfController.importDSF
 );
 router.get("/:folderId", authenticate, dsfController.getDSF);
+router.put("/:id", authenticate, dsfController.updateDSF);
 router.post("/:id/validate", authenticate, dsfController.validateDSF);
 router.post("/:id/export", authenticate, dsfController.exportDSF);
 router.get(

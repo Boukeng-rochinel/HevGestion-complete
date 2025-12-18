@@ -4,6 +4,7 @@ import { AuthRequest } from "../middleware/auth.middleware";
 import { prisma } from "../lib/prisma";
 import { BadRequestError, NotFoundError, ForbiddenError } from "../lib/errors";
 import { CountrySelection, FolderStatus } from "@prisma/client";
+import { auditService } from "../services/audit.service";
 
 class ClientController {
   async getClients(req: AuthRequest, res: Response, next: NextFunction) {
@@ -267,6 +268,22 @@ class ClientController {
         },
       });
 
+      // Log audit event
+      await auditService.logClientCreated(
+        userId,
+        {
+          name,
+          legalForm,
+          taxNumber,
+          address,
+          city,
+          phone,
+          country,
+          currency,
+        },
+        client.id
+      );
+
       res.status(201).json({
         message: "Client created successfully",
         client,
@@ -282,12 +299,12 @@ class ClientController {
       const userId = req.user!.userId;
       const userRole = req.user!.role;
 
-      // Check if client exists
-      const client = await prisma.client.findUnique({
+      // Check if client exists and get old data for audit
+      const oldClient = await prisma.client.findUnique({
         where: { id },
       });
 
-      if (!client) {
+      if (!oldClient) {
         throw new NotFoundError("Client not found");
       }
 
@@ -296,12 +313,7 @@ class ClientController {
         // ADMIN can update any client
       } else if (userRole === "COMPTABLE") {
         // COMPTABLE can only update clients they created
-        const client = await prisma.client.findUnique({
-          where: { id },
-          select: { createdBy: true },
-        });
-
-        if (!client || client.createdBy !== userId) {
+        if (oldClient.createdBy !== userId) {
           throw new ForbiddenError("Access denied to update this client");
         }
       } else {
@@ -341,6 +353,9 @@ class ClientController {
           ...(country && { country: country as CountrySelection }),
         },
       });
+
+      // Log audit event
+      await auditService.logClientUpdated(userId, id, oldClient, updatedClient);
 
       res.json({
         message: "Client updated successfully",
@@ -384,6 +399,9 @@ class ClientController {
       await prisma.client.delete({
         where: { id },
       });
+
+      // Log audit event
+      await auditService.logClientDeleted(userId, id, client);
 
       res.json({
         message: "Client deleted successfully",

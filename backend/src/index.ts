@@ -13,6 +13,11 @@ import folderRoutes from "./routes/folder.routes";
 import balanceRoutes from "./routes/balance.routes";
 import dsfRoutes from "./routes/dsf.routes";
 import declarationRoutes from "./routes/declaration.routes";
+import dsfConfigRoutes from "./routes/dsf-config.routes";
+import dgiDeclarationRoutes from "./routes/dgi-declaration.routes";
+import assistantRoutes from "./routes/assistant.routes";
+import reportRoutes from "./routes/report.routes";
+import auditRoutes from "./routes/audit.routes";
 
 const app: Express = express();
 
@@ -54,6 +59,11 @@ app.use("/api/folders", folderRoutes);
 app.use("/api/balances", balanceRoutes);
 app.use("/api/dsf", dsfRoutes);
 app.use("/api/declarations", declarationRoutes);
+app.use("/api/dsf-configs", dsfConfigRoutes);
+app.use("/api/dgi", dgiDeclarationRoutes);
+app.use("/api/assistants", assistantRoutes);
+app.use("/api/reports", reportRoutes);
+app.use("/api/audit", auditRoutes);
 
 // Error handling
 app.use(errorHandler);

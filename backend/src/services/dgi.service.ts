@@ -21,6 +21,27 @@ interface DGIStatusResponse {
   paymentStatus?: string;
 }
 
+interface DGICreateProcessResponse {
+  id: string;
+  action: string;
+  status: string;
+}
+
+interface DGIDeleteProcessResponse {
+  action: string;
+  status: string;
+}
+
+interface DGIGetProcessesResponse {
+  total: number;
+  records: any[];
+}
+
+interface DGILoginResponse {
+  token: string;
+  statusCode: number;
+}
+
 type DeclarationWithRelations = TaxDeclaration & {
   folder: Folder & {
     client: Client;
@@ -149,7 +170,136 @@ export class DGIService {
     }
   }
 
-  private async authenticateWithDGI(
+  async createProcess(
+    declarationYear: string,
+    declarationType: string,
+    authToken: string
+  ): Promise<DGICreateProcessResponse> {
+    try {
+      const response = await this.client.post(
+        `/api/v1/process/${declarationYear}/${declarationType}`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+          },
+        }
+      );
+
+      return {
+        id: response.data.id,
+        action: response.data.action,
+        status: response.data.status,
+      };
+    } catch (error: any) {
+      console.error("DGI create process error:", error);
+
+      // Handle specific errors
+      if (error.response?.status === 409) {
+        throw new Error("RESOURCE_ALREADY_EXISTS_CONFLICT");
+      }
+      if (error.response?.status === 415) {
+        throw new Error("UNSUPPORTED_DECLARATION_TYPE");
+      }
+
+      throw new Error("Failed to create declaration process");
+    }
+  }
+
+  async deleteProcess(
+    processId: string,
+    authToken: string
+  ): Promise<DGIDeleteProcessResponse> {
+    try {
+      const response = await this.client.delete(`/api/v1/process`, {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+        data: { id: processId },
+      });
+
+      return {
+        action: response.data.action,
+        status: response.data.status,
+      };
+    } catch (error: any) {
+      console.error("DGI delete process error:", error);
+
+      // Handle specific errors
+      if (error.response?.status === 404) {
+        throw new Error("RESOURCE_NOT_FOUND");
+      }
+
+      throw new Error("Failed to delete declaration process");
+    }
+  }
+
+  async getProcesses(authToken: string): Promise<DGIGetProcessesResponse> {
+    try {
+      const response = await this.client.get(`/api/v1/process`, {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      });
+
+      return {
+        total: response.data.total,
+        records: response.data.records,
+      };
+    } catch (error: any) {
+      console.error("DGI get processes error:", error);
+      throw new Error("Failed to get declaration processes");
+    }
+  }
+
+  async getProcessesByYear(
+    declarationYear: string,
+    authToken: string
+  ): Promise<DGIGetProcessesResponse> {
+    try {
+      const response = await this.client.get(
+        `/api/v1/process/${declarationYear}`,
+        {
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+          },
+        }
+      );
+
+      return {
+        total: response.data.total,
+        records: response.data.records,
+      };
+    } catch (error: any) {
+      console.error("DGI get processes by year error:", error);
+      throw new Error("Failed to get declaration processes for year");
+    }
+  }
+
+  async login(username: string, password: string): Promise<DGILoginResponse> {
+    try {
+      const response = await this.client.post("/api/v1/auth", {
+        username,
+        password,
+      });
+
+      return {
+        token: response.data.token,
+        statusCode: response.data.statusCode,
+      };
+    } catch (error: any) {
+      console.error("DGI login error:", error);
+
+      // Handle specific errors
+      if (error.response?.status === 401) {
+        throw new Error("UNAUTHORIZED");
+      }
+
+      throw new Error("Failed to authenticate with DGI");
+    }
+  }
+
+  async authenticateWithDGI(
     niuNumber: string,
     password: string
   ): Promise<string> {
