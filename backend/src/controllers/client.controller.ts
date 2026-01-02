@@ -3,7 +3,7 @@ import { Response, NextFunction } from "express";
 import { AuthRequest } from "../middleware/auth.middleware";
 import { prisma } from "../lib/prisma";
 import { BadRequestError, NotFoundError, ForbiddenError } from "../lib/errors";
-import { CountrySelection, FolderStatus } from "@prisma/client";
+import { CountrySelection, FolderStatus, ClientType } from "@prisma/client";
 import { auditService } from "../services/audit.service";
 
 class ClientController {
@@ -183,8 +183,16 @@ class ClientController {
 
       // COMPTABLE users can create unlimited clients (no limit)
 
-      const { name, legalForm, taxNumber, address, city, phone, country } =
-        req.body;
+      const {
+        name,
+        legalForm,
+        clientType,
+        taxNumber,
+        address,
+        city,
+        phone,
+        country,
+      } = req.body;
 
       // Validate required fields
       if (!name || !legalForm || !country) {
@@ -245,6 +253,7 @@ class ClientController {
         data: {
           name,
           legalForm,
+          clientType: clientType || "NORMAL",
           taxNumber,
           address,
           city,
@@ -322,8 +331,16 @@ class ClientController {
         );
       }
 
-      const { name, legalForm, taxNumber, address, city, phone, country } =
-        req.body;
+      const {
+        name,
+        legalForm,
+        clientType,
+        taxNumber,
+        address,
+        city,
+        phone,
+        country,
+      } = req.body;
 
       // Validate legal form if provided
       if (

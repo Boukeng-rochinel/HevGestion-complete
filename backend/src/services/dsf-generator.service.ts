@@ -5,11 +5,47 @@ import * as path from "path";
 import { config } from "../config";
 
 interface DSFData {
-  balanceSheet: any;
-  incomeStatement: any;
   taxTables: any;
   notes: any;
   signaletics: any;
+  note1: any;
+  note2: any;
+  note3: any;
+  note4: any;
+  note5: any;
+  note6: any;
+  note7: any;
+  note8: any;
+  note9: any;
+  note10: any;
+  note11: any;
+  note12: any;
+  note13: any;
+  note14: any;
+  note15: any;
+  note16: any;
+  note17: any;
+  note18: any;
+  note19: any;
+  note20: any;
+  note21: any;
+  note22: any;
+  note23: any;
+  note24: any;
+  note25: any;
+  note26: any;
+  note27: any;
+  note28: any;
+  note29: any;
+  note30: any;
+  note31: any;
+  note32: any;
+  note33: any;
+  fiche1: any;
+  fiche2: any;
+  fiche3: any;
+  cter: any;
+  cf1: any;
 }
 
 interface CoherenceResult {
@@ -18,12 +54,12 @@ interface CoherenceResult {
 }
 
 type FolderWithRelations = Folder & {
-  client: Client;
+  client: Client & { clientType?: string };
   balances: (Balance & { fixedAssets?: any[]; equilibrium?: any })[];
 };
 
 export class DSFGenerator {
-  async generate(folder: FolderWithRelations): Promise<DSFData> {
+  async generate(folder: FolderWithRelations): Promise<any[]> {
     const nBalance = folder.balances.find((b) => b.type === "CURRENT_YEAR");
     const n1Balance = folder.balances.find((b) => b.type === "PREVIOUS_YEAR");
 
@@ -34,13 +70,35 @@ export class DSFGenerator {
     const nData = nBalance.originalData as any;
     const n1Data = n1Balance?.originalData as any;
 
-    return {
-      balanceSheet: this.generateBalanceSheet(nData, n1Data),
-      incomeStatement: this.generateIncomeStatement(nData, n1Data),
-      taxTables: this.generateTaxTables(nData, n1Data, folder),
-      notes: this.generateAllNotes(nData, n1Data, nBalance, folder),
-      signaletics: this.generateSignaletics(folder),
-    };
+    const reports: any[] = [];
+
+    // Generate all reports and add them to the array
+    reports.push({
+      type: "BALANCE_SHEET",
+      data: this.generateBalanceSheet(nData, n1Data),
+    });
+
+    reports.push({
+      type: "INCOME_STATEMENT",
+      data: this.generateIncomeStatement(nData, n1Data),
+    });
+
+    reports.push({
+      type: "TAX_TABLES",
+      data: this.generateTaxTables(nData, n1Data, folder),
+    });
+
+    reports.push({
+      type: "NOTES",
+      data: await this.generateAllNotes(nData, n1Data, nBalance, folder),
+    });
+
+    reports.push({
+      type: "SIGNALETICS",
+      data: this.generateSignaletics(folder),
+    });
+
+    return reports;
   }
 
   private generateBalanceSheet(nData: any, n1Data: any): any {
@@ -675,80 +733,127 @@ export class DSFGenerator {
     };
   }
 
-  private generateAllNotes(
+  private async generateAllNotes(
     nData: any,
     n1Data: any,
     nBalance: Balance,
     folder: FolderWithRelations
-  ): any {
+  ): Promise<any> {
     const n = nData.rows || [];
     const n1 = n1Data?.rows || [];
+    const clientType = folder.client.clientType || "NORMAL";
 
-    return {
-      note1: this.generateNote1(folder),
-      note2: this.generateNote2(),
-      note3A: this.generateNote3A(n),
-      note3B: this.generateNote3B(n, n1),
-      note3C: this.generateNote3C(n),
-      c1Note3C: this.generateC1Note3C(n),
-      note3D: this.generateNote3D(n),
-      note3E: this.generateNote3E(n),
-      note3F: this.generateNote3F(n),
-      note4: this.generateNote4(n, n1),
-      note5: this.generateNote5(n),
-      note6: this.generateNote6(n, n1),
-      note7: this.generateNote7(n, n1),
-      note8: this.generateNote8(n, n1),
-      note9: this.generateNote9(n),
-      note10: this.generateNote10(n),
-      note11: this.generateNote11(n),
-      note12: this.generateNote12(n),
-      note13: this.generateNote13(folder),
-      note14: this.generateNote14(n),
-      note15A: this.generateNote15A(n),
-      note15B: this.generateNote15B(n),
-      note16A: this.generateNote16A(n),
-      note16B: this.generateNote16B(n),
-      note16BBis: this.generateNote16BBis(n),
-      note16C: this.generateNote16C(n),
-      note17: this.generateNote17(n),
-      c1Note17: this.generateC1Note17(n),
-      note18: this.generateNote18(n),
-      note19: this.generateNote19(n),
-      note20: this.generateNote20(n),
-      note21: this.generateNote21(n, n1),
-      note22: this.generateNote22(n, n1),
-      note23: this.generateNote23(n, n1),
-      note24: this.generateNote24(n, n1),
-      note25: this.generateNote25(n),
-      c1Note25: this.generateC1Note25(n),
-      c2Note25: this.generateC2Note25(n),
-      note26: this.generateNote26(n, n1),
-      note27A: this.generateNote27A(n, n1),
-      c1Note27A: this.generateC1Note27A(n),
-      note27B: this.generateNote27B(n),
-      note28: this.generateNote28(n),
-      c1Note28: this.generateC1Note28(n),
-      c2Note28: this.generateC2Note28(n),
-      note29: this.generateNote29(n, n1),
-      note30: this.generateNote30(n, n1),
-      note31: this.generateNote31(n),
-      note32: this.generateNote32(n),
-      note33: this.generateNote33(n),
-      note34: this.generateNote34(n),
-      note35: this.generateNote35(),
-      cf1: this.generateCF1(n),
-    };
+    const notes: any = {};
+
+    // Common notes for all client types
+    notes.note1 = await this.generateNote1(folder, n);
+    notes.note2 = this.generateNote2();
+    notes.note3A = await this.generateNote3A(n, folder);
+    notes.note3B = this.generateNote3B(n, n1);
+    notes.note3C = this.generateNote3C(n);
+    notes.c1Note3C = this.generateC1Note3C(n);
+    notes.note3D = this.generateNote3D(n);
+    notes.note3E = this.generateNote3E(n);
+    notes.note3F = this.generateNote3F(n);
+    notes.note4 = await this.generateNote4(n, n1, folder);
+    notes.note5 = this.generateNote5(n);
+    notes.note6 = this.generateNote6(n, n1);
+    notes.note7 = await this.generateNote7(n, n1, folder);
+    notes.note8 = this.generateNote8(n, n1);
+    notes.note9 = this.generateNote9(n);
+    notes.note10 = this.generateNote10(n);
+    notes.note11 = this.generateNote11(n);
+    notes.note12 = this.generateNote12(n);
+    notes.note13 = this.generateNote13(folder);
+    notes.note14 = this.generateNote14(n);
+    notes.note15A = this.generateNote15A(n);
+    notes.note15B = this.generateNote15B(n);
+    notes.note16A = this.generateNote16A(n);
+    notes.note16B = this.generateNote16B(n);
+    notes.note16BBis = this.generateNote16BBis(n);
+    notes.note16C = this.generateNote16C(n);
+    notes.note17 = this.generateNote17(n);
+    notes.c1Note17 = this.generateC1Note17(n);
+    notes.note18 = this.generateNote18(n);
+    notes.note19 = this.generateNote19(n);
+    notes.note20 = this.generateNote20(n);
+    notes.note21 = this.generateNote21(n, n1);
+    notes.note22 = this.generateNote22(n, n1);
+    notes.note23 = this.generateNote23(n, n1);
+    notes.note24 = this.generateNote24(n, n1);
+    notes.note25 = this.generateNote25(n);
+    notes.c1Note25 = this.generateC1Note25(n);
+    notes.c2Note25 = this.generateC2Note25(n);
+    notes.note26 = this.generateNote26(n, n1);
+    notes.note27A = this.generateNote27A(n, n1);
+    notes.c1Note27A = this.generateC1Note27A(n);
+    notes.note27B = this.generateNote27B(n);
+    notes.note28 = this.generateNote28(n);
+    notes.c1Note28 = this.generateC1Note28(n);
+    notes.c2Note28 = this.generateC2Note28(n);
+    notes.note29 = this.generateNote29(n, n1);
+    notes.note30 = this.generateNote30(n, n1);
+    notes.note31 = this.generateNote31(n);
+    notes.note32 = this.generateNote32(n);
+    notes.note33 = this.generateNote33(n);
+    notes.note34 = this.generateNote34(n);
+    notes.note35 = this.generateNote35();
+    notes.cf1 = await this.generateCF1(n, folder);
+
+    // Add client type specific notes
+    if (clientType === "ASSURANCE") {
+      // Add assurance-specific notes
+      notes.bilanActif = this.generateBilanActif(n);
+      notes.bilanPassif = this.generateBilanPassif(n);
+      notes.charges = this.generateCharges(n);
+      notes.compteGeneral = this.generateCompteGeneral(n);
+      notes.etatC4 = this.generateEtatC4(n);
+      notes.etatC11 = this.generateEtatC11(n);
+      notes.etatC11Vie = this.generateEtatC11Vie(n);
+      notes.produits = this.generateProduits(n);
+      // Add other assurance notes...
+    } else if (clientType === "SMT") {
+      // Add SMT-specific notes
+      notes.grilleAnalyseNotesSMT = this.generateGrilleAnalyseNotesSMT(n);
+      notes.modBilan = this.generateModBilan(n);
+      notes.note1Smt = this.generateNote1Smt(n);
+      notes.note2Smt = this.generateNote2Smt(n);
+      notes.note3Smt = this.generateNote3Smt(n);
+      notes.note4Smt = this.generateNote4Smt(n);
+      notes.note5Smt = this.generateNote5Smt(n);
+      notes.note6Smt = this.generateNote6Smt(n);
+      // Add other SMT notes...
+    }
+
+    return notes;
   }
 
-  private generateNote1(folder: FolderWithRelations): any {
+  private async generateNote1(
+    folder: FolderWithRelations,
+    n: any[]
+  ): Promise<any> {
+    // Get Note1 config and account mappings
+    const note1Config = await this.getConfigByCategory("note1", folder);
+    const accountMappings = note1Config?.accountMappings || [];
+
+    const dettesGaranties = accountMappings.map((mapping: any) => ({
+      compte: mapping.accountNumber,
+      montant: this.getBalanceValue(
+        n,
+        folder,
+        mapping.accountNumber,
+        mapping.source
+      ),
+      garantie: mapping.destination || "À préciser",
+    }));
+
     return {
       title: "DETTES GARANTIES PAR DES SURETES REELLES",
       raisonSociale: folder.client.name,
       formeJuridique: folder.client.legalForm,
       activitePrincipale: "À compléter",
       effectif: 0,
-      dettesGaranties: [],
+      dettesGaranties,
     };
   }
 
@@ -761,13 +866,51 @@ export class DSFGenerator {
     };
   }
 
-  private generateNote3A(n: any[]): any {
+  private async generateNote3A(
+    n: any[],
+    folder: FolderWithRelations
+  ): Promise<any> {
+    // Get Note3A config and account mappings
+    const note3AConfig = await this.getConfigByCategory("note3A", folder);
+    const accountMappings = note3AConfig?.accountMappings || [];
+
+    let immobilisationsIncorporelles = this.sumAccounts(n, ["21"]);
+    let immobilisationsCorporelles = this.sumAccounts(n, [
+      "22",
+      "23",
+      "24",
+      "25",
+    ]);
+    let immobilisationsFinancieres = this.sumAccounts(n, ["26", "27"]);
+
+    // Apply account mappings to override default calculations
+    accountMappings.forEach((mapping: any) => {
+      const value = this.getBalanceValue(
+        n,
+        folder,
+        mapping.accountNumber,
+        mapping.source
+      );
+      if (mapping.destination === "immobilisationsIncorporelles") {
+        immobilisationsIncorporelles = value;
+      } else if (mapping.destination === "immobilisationsCorporelles") {
+        immobilisationsCorporelles = value;
+      } else if (mapping.destination === "immobilisationsFinancieres") {
+        immobilisationsFinancieres = value;
+      }
+    });
+
+    const total =
+      immobilisationsIncorporelles +
+      immobilisationsCorporelles +
+      immobilisationsFinancieres;
+
     return {
       title: "IMMOBILISATIONS BRUTES",
-      immobilisationsIncorporelles: this.sumAccounts(n, ["21"]),
-      immobilisationsCorporelles: this.sumAccounts(n, ["22", "23", "24", "25"]),
-      immobilisationsFinancieres: this.sumAccounts(n, ["26", "27"]),
-      total: this.sumAccounts(n, ["21", "22", "23", "24", "25", "26", "27"]),
+      immobilisationsIncorporelles,
+      immobilisationsCorporelles,
+      immobilisationsFinancieres,
+      total,
     };
   }
 
@@ -858,13 +1001,44 @@ export class DSFGenerator {
     };
   }
 
-  private generateNote4(n: any[], n1: any[]): any {
+  private async generateNote4(
+    n: any[],
+    n1: any[],
+    folder: FolderWithRelations
+  ): Promise<any> {
+    // Get Note4 config and account mappings
+    const note4Config = await this.getConfigByCategory("note4", folder);
+    const accountMappings = note4Config?.accountMappings || [];
+
+    let titresDeParticipation = this.sumAccounts(n, ["261", "262"]);
+    let autresTitres = this.sumAccounts(n, ["26", "27"]);
+    let pretsEtCreances = this.sumAccounts(n, ["274", "275", "276"]);
+
+    // Apply account mappings
+    accountMappings.forEach((mapping: any) => {
+      const value = this.getBalanceValue(
+        n,
+        folder,
+        mapping.accountNumber,
+        mapping.source
+      );
+      if (mapping.destination === "titresDeParticipation") {
+        titresDeParticipation = value;
+      } else if (mapping.destination === "autresTitres") {
+        autresTitres = value;
+      } else if (mapping.destination === "pretsEtCreances") {
+        pretsEtCreances = value;
+      }
+    });
+
+    const total = titresDeParticipation + autresTitres + pretsEtCreances;
+
     return {
       title: "IMMOBILISATIONS FINANCIERES",
-      titresDeParticipation: this.sumAccounts(n, ["261", "262"]),
-      autresTitres: this.sumAccounts(n, ["26", "27"]),
-      pretsEtCreances: this.sumAccounts(n, ["274", "275", "276"]),
-      total: this.sumAccounts(n, ["26", "27"]),
+      titresDeParticipation,
+      autresTitres,
+      pretsEtCreances,
+      total,
     };
   }
 
@@ -924,29 +1098,77 @@ export class DSFGenerator {
     };
   }
 
-  private generateNote7(n: any[], n1: any[]): any {
+  private async generateNote7(
+    n: any[],
+    n1: any[],
+    folder: FolderWithRelations
+  ): Promise<any> {
+    // Get Note7 config and account mappings
+    const note7Config = await this.getConfigByCategory("note7", folder);
+    const accountMappings = note7Config?.accountMappings || [];
+
+    let clientsOrdinairesN = this.sumAccounts(n, ["411"]);
+    let clientsOrdinairesN1 = this.sumAccounts(n1, ["411"]);
+    let clientsDouteuxN = this.sumAccounts(n, ["416"]);
+    let clientsDouteuxN1 = this.sumAccounts(n1, ["416"]);
+    let creancesSurCessionsN = this.sumAccounts(n, ["4651", "4652"]);
+    let creancesSurCessionsN1 = this.sumAccounts(n1, ["4651", "4652"]);
+    let provisionsClientsN = this.sumAccounts(n, ["491"]);
+    let provisionsClientsN1 = this.sumAccounts(n1, ["491"]);
+
+    // Apply account mappings
+    accountMappings.forEach((mapping: any) => {
+      const valueN = this.getBalanceValue(
+        n,
+        folder,
+        mapping.accountNumber,
+        mapping.source
+      );
+      const valueN1 = n1
+        ? this.getBalanceValue(
+            n1,
+            folder,
+            mapping.accountNumber,
+            mapping.source
+          )
+        : 0;
+
+      if (mapping.destination === "clientsOrdinaires") {
+        clientsOrdinairesN = valueN;
+        clientsOrdinairesN1 = valueN1;
+      } else if (mapping.destination === "clientsDouteux") {
+        clientsDouteuxN = valueN;
+        clientsDouteuxN1 = valueN1;
+      } else if (mapping.destination === "creancesSurCessions") {
+        creancesSurCessionsN = valueN;
+        creancesSurCessionsN1 = valueN1;
+      } else if (mapping.destination === "provisionsClients") {
+        provisionsClientsN = valueN;
+        provisionsClientsN1 = valueN1;
+      }
+    });
+
+    const totalN =
+      clientsOrdinairesN +
+      clientsDouteuxN +
+      creancesSurCessionsN -
+      provisionsClientsN;
+    const totalN1 =
+      clientsOrdinairesN1 +
+      clientsDouteuxN1 +
+      creancesSurCessionsN1 -
+      provisionsClientsN1;
+
     return {
       title: "CLIENTS",
-      clientsOrdinaires: {
-        n: this.sumAccounts(n, ["411"]),
-        n1: this.sumAccounts(n1, ["411"]),
-      },
-      clientsDouteux: {
-        n: this.sumAccounts(n, ["416"]),
-        n1: this.sumAccounts(n1, ["416"]),
-      },
+      clientsOrdinaires: { n: clientsOrdinairesN, n1: clientsOrdinairesN1 },
+      clientsDouteux: { n: clientsDouteuxN, n1: clientsDouteuxN1 },
       creancesSurCessions: {
-        n: this.sumAccounts(n, ["4651", "4652"]),
-        n1: this.sumAccounts(n1, ["4651", "4652"]),
+        n: creancesSurCessionsN,
+        n1: creancesSurCessionsN1,
       },
-      provisionsClients: {
-        n: this.sumAccounts(n, ["491"]),
-        n1: this.sumAccounts(n1, ["491"]),
-      },
-      total: {
-        n: this.calculateNet(n, ["411", "416"], ["491"]),
-        n1: this.calculateNet(n1, ["411", "416"], ["491"]),
-      },
+      provisionsClients: { n: provisionsClientsN, n1: provisionsClientsN1 },
+      total: { n: totalN, n1: totalN1 },
     };
   }
 
@@ -1709,36 +1931,367 @@ export class DSFGenerator {
     };
   }
 
-  private generateCF1(n: any[]): any {
-    const resultatComptable = this.getAccountBalance(n, "13");
-    const reintegrations = 0;
-    const deductions = 0;
-    const resultatFiscal = resultatComptable + reintegrations - deductions;
+  private async getConfigByCategory(
+    category: string,
+    folder: FolderWithRelations
+  ): Promise<any> {
+    // Import prisma here to avoid circular dependencies
+    const { prisma } = require("../lib/prisma");
 
-    return {
-      title:
-        "TABLEAU DE PASSAGE DU RESULTAT COMPTABLE AVANT IMPOT AU RESULTAT FISCAL",
-      resultatComptableAvantImpot: resultatComptable,
-      reintegrations: {
-        chargesNonDeductibles: 0,
-        amendesEtPenalites: 0,
-        chargesExcessives: 0,
-        autresReintegrations: 0,
-        totalReintegrations: reintegrations,
+    // Find the config by category
+    const config = await prisma.dSFConfig.findUnique({
+      where: { category: category.toLowerCase() },
+      include: {
+        accountMappings: {
+          where: { isActive: true },
+        },
       },
-      deductions: {
-        provisionsExonerees: 0,
-        plusValuesReinvesties: 0,
-        deficitsReportes: 0,
-        autresDeductions: 0,
-        totalDeductions: deductions,
+    });
+
+    return config;
+  }
+
+  private calculateFromMappings(
+    n: any[],
+    folder: FolderWithRelations,
+    accountMappings: any[],
+    type: "reintegrations" | "deductions"
+  ): number {
+    // Group mappings by destination and sum values for same destination
+    const destinationMap = new Map<string, number>();
+
+    accountMappings.forEach((mapping: any) => {
+      const value = this.getBalanceValue(
+        n,
+        folder,
+        mapping.accountNumber,
+        mapping.source
+      );
+      const currentSum = destinationMap.get(mapping.destination) || 0;
+      destinationMap.set(mapping.destination, currentSum + value);
+    });
+
+    // For now, return sum of all values (can be filtered by type later based on destination patterns)
+    return Array.from(destinationMap.values()).reduce(
+      (sum, val) => sum + val,
+      0
+    );
+  }
+
+  private getBalanceValue(
+    n: any[],
+    folder: FolderWithRelations,
+    accountNumber: string,
+    source: string
+  ): number {
+    // Find the account in balance data
+    const account = n.find(
+      (row: any) => String(row.accountNumber) === accountNumber
+    );
+
+    if (!account) return 0;
+
+    // Get the appropriate balance value based on source
+    switch (source) {
+      case "OD":
+        return parseFloat(account.openingDebit || 0);
+      case "OC":
+        return parseFloat(account.openingCredit || 0);
+      case "MD":
+        return parseFloat(account.movementDebit || 0);
+      case "MC":
+        return parseFloat(account.movementCredit || 0);
+      case "SD":
+        return parseFloat(account.closingDebit || 0);
+      case "SC":
+        return parseFloat(account.closingCredit || 0);
+      case "MCD":
+        return (
+          parseFloat(account.movementDebit || 0) -
+          parseFloat(account.movementCredit || 0)
+        );
+      case "SCD":
+        return (
+          parseFloat(account.closingDebit || 0) -
+          parseFloat(account.closingCredit || 0)
+        );
+      default:
+        return 0;
+    }
+  }
+
+  private applyAccountMappings(
+    n: any[],
+    folder: FolderWithRelations,
+    accountMappings: any[]
+  ): Map<string, number> {
+    const destinationMap = new Map<string, number>();
+
+    accountMappings.forEach((mapping: any) => {
+      const value = this.getBalanceValue(
+        n,
+        folder,
+        mapping.accountNumber,
+        mapping.source
+      );
+      const currentSum = destinationMap.get(mapping.destination) || 0;
+      destinationMap.set(mapping.destination, currentSum + value);
+    });
+
+    return destinationMap;
+  }
+
+  private async generateCF1(
+    n: any[],
+    folder: FolderWithRelations
+  ): Promise<any> {
+    const resultatComptable = this.getAccountBalance(n, "13");
+
+    // Get CF1 config and account mappings
+    const cf1Config = await this.getConfigByCategory("cf1", folder);
+    const accountMappings = cf1Config?.accountMappings || [];
+
+    // Initialize CF1 data structure with default values
+    const cf1Data = {
+      headerInfo: {
+        entityName: folder.client.name,
+        fiscalYear: folder.fiscalYear.toString(),
+        idNumber: folder.client.taxNumber || "",
+        duration: "12",
       },
-      resultatFiscal,
-      impotCalcule: Math.max(
-        resultatFiscal * 0.3,
-        this.sumAccounts(n, ["70", "71"]) * 0.011
-      ),
+      rows: [
+        {
+          id: "1",
+          label: "Bénéfice net comptable avant impôt",
+          line: 1,
+          amount: resultatComptable,
+        },
+        { id: "2", label: "Amortissement non déductible", line: 3, amount: 0 },
+        {
+          id: "3",
+          label:
+            "Amortissement comptable mais réputes différés en période déficitaire",
+          line: 4,
+          amount: 0,
+        },
+        { id: "4", label: "Provisions non déductibles", line: 5, amount: 0 },
+        {
+          id: "5",
+          label: "Intérêt excédentaires des comptes courants d'associés",
+          line: 6,
+          amount: 0,
+        },
+        {
+          id: "6",
+          label: "Frais de siège et d'assistance technique",
+          line: 7,
+          amount: 0,
+        },
+        {
+          id: "7",
+          label: "Impôt non déductibles autres qu'impôt sur le résultat",
+          line: 8,
+          amount: 0,
+        },
+        {
+          id: "8",
+          label: "Amendes et pénalités non déductibles",
+          line: 9,
+          amount: 0,
+        },
+        {
+          id: "9",
+          label: "Pourboires et dons non déductibles",
+          line: 10,
+          amount: 0,
+        },
+        {
+          id: "10",
+          label: "Revenu à la source(IRMC) sur revenus des capitaux mobiliers",
+          line: 12,
+          amount: 0,
+        },
+        { id: "11", label: "Divers 1", line: 13, amount: 0 },
+        { id: "12", label: "Divers 2", line: 14, amount: 0 },
+        { id: "13", label: "Divers 3", line: 15, amount: 0 },
+        {
+          id: "14",
+          label:
+            "Total intermédiaire POSITIF : ligne 15=lignes1ou ligne15ligne2",
+          line: 16,
+          amount: 0,
+        },
+        {
+          id: "15",
+          label: "Total intermédiaire NEGATIF : ligne2=lignes 15",
+          line: 17,
+          amount: 0,
+        },
+        {
+          id: "16",
+          label: "Amortissement antérieur différés et imputés sur l'exercice",
+          line: 18,
+          amount: 0,
+        },
+        {
+          id: "17",
+          label:
+            "Provisions antérieurement taxées ou définitivement exonérées réintégrées dans",
+          line: 19,
+          amount: 0,
+        },
+        {
+          id: "18",
+          label:
+            "Fraction non imposable des plus-values réalisées en fin d'explication",
+          line: 20,
+          amount: 0,
+        },
+        {
+          id: "19",
+          label:
+            "Produit net des filiales (après déduction de la quote-part de frais et charges)",
+          line: 21,
+          amount: 0,
+        },
+        {
+          id: "20",
+          label: "Autres revenus mobiliers déductibles",
+          line: 22,
+          amount: 0,
+        },
+        {
+          id: "21",
+          label: "Frais de siège et d'assistance technique déductible",
+          line: 23,
+          amount: 0,
+        },
+        { id: "22", label: "Divers 1", line: 24, amount: 0 },
+        { id: "23", label: "Divers 2", line: 25, amount: 0 },
+        { id: "24", label: "Total lignes 18 à 26", line: 27, amount: 0 },
+        {
+          id: "25",
+          label: "BÉNÉFICE FISCAL DE L'EXERCICE : ligne 16 - ligne 27",
+          line: 28,
+          amount: 0,
+        },
+        {
+          id: "26",
+          label:
+            "PERTE FISCALE DE L'EXERCICE : ligne 27 - ligne 16 ou ligne 17 +",
+          line: 29,
+          amount: 0,
+        },
+      ],
+      rubriques: [
+        {
+          id: "1",
+          label: "Impôt sur les sociétés",
+          line: 31,
+          minimum: "Minimum de perception",
+          base: "30%",
+          rate: "30%",
+          principal: "",
+        },
+        {
+          id: "2",
+          label: "BIC et BNC",
+          line: 32,
+          minimum: "",
+          base: "",
+          rate: "22%",
+          principal: "",
+        },
+        {
+          id: "3",
+          label: "",
+          line: 33,
+          minimum: "",
+          base: "",
+          rate: "",
+          principal: "",
+        },
+        {
+          id: "4",
+          label: "Bénéfice artisanaux",
+          line: 34,
+          minimum: "",
+          base: "",
+          rate: "11%",
+          principal: "",
+        },
+        {
+          id: "5",
+          label: "",
+          line: 35,
+          minimum: "",
+          base: "",
+          rate: "",
+          principal: "",
+        },
+        {
+          id: "6",
+          label: "Bénéfices agricoles",
+          line: 36,
+          minimum: "",
+          base: "",
+          rate: "15%",
+          principal: "",
+        },
+        {
+          id: "7",
+          label: "",
+          line: 37,
+          minimum: "",
+          base: "",
+          rate: "",
+          principal: "",
+        },
+        {
+          id: "8",
+          label: "TOTAL lignes 32 à 38",
+          line: 39,
+          minimum: "",
+          base: "",
+          rate: "",
+          principal: "",
+        },
+      ],
     };
+
+    // Apply account mappings to populate CF1 rows
+    accountMappings.forEach((mapping: any) => {
+      const value = this.getBalanceValue(
+        n,
+        folder,
+        mapping.accountNumber,
+        mapping.source
+      );
+      const rowIndex = cf1Data.rows.findIndex(
+        (row) => row.id === mapping.destination
+      );
+
+      if (rowIndex !== -1) {
+        cf1Data.rows[rowIndex].amount = value;
+      }
+    });
+
+    // Calculate totals
+    const reintegrationsSum = cf1Data.rows
+      .slice(1, 13)
+      .reduce((sum, row) => sum + row.amount, 0);
+    const deductionsSum = cf1Data.rows
+      .slice(15, 24)
+      .reduce((sum, row) => sum + row.amount, 0);
+    const beneficeFiscal = cf1Data.rows[13].amount - deductionsSum;
+    const perteFiscal = deductionsSum - cf1Data.rows[13].amount;
+
+    cf1Data.rows[12].amount = reintegrationsSum; // Line 15
+    cf1Data.rows[23].amount = deductionsSum; // Line 27
+    cf1Data.rows[24].amount = beneficeFiscal; // Line 28
+    cf1Data.rows[25].amount = perteFiscal; // Line 29
+
+    return cf1Data;
   }
 
   private generateSignaletics(folder: FolderWithRelations): any {
@@ -2226,5 +2779,1140 @@ export class DSFGenerator {
     });
 
     return XLSX.utils.aoa_to_sheet(wsData);
+  }
+
+  // New functions for processing DSF configs and generating reports
+
+  /**
+   * Generic function to generate a report from account mappings
+   */
+  private generateReportFromMappings(
+    n: any[],
+    n1: any[],
+    folder: FolderWithRelations,
+    accountMappings: any[],
+    baseReportData: any
+  ): any {
+    const reportData = { ...baseReportData };
+
+    accountMappings.forEach((mapping: any) => {
+      const valueN = this.getBalanceValue(
+        n,
+        folder,
+        mapping.accountNumber,
+        mapping.source
+      );
+      const valueN1 = n1
+        ? this.getBalanceValue(
+            n1,
+            folder,
+            mapping.accountNumber,
+            mapping.source
+          )
+        : 0;
+
+      // Apply the value to the destination in the report data
+      this.applyValueToReport(reportData, mapping.destination, valueN, valueN1);
+    });
+
+    return reportData;
+  }
+
+  /**
+   * Apply value to report data based on destination path
+   */
+  private applyValueToReport(
+    reportData: any,
+    destination: string,
+    valueN: number,
+    valueN1?: number
+  ): void {
+    const keys = destination.split(".");
+    let current = reportData;
+
+    for (let i = 0; i < keys.length - 1; i++) {
+      if (!current[keys[i]]) {
+        current[keys[i]] = {};
+      }
+      current = current[keys[i]];
+    }
+
+    const lastKey = keys[keys.length - 1];
+
+    if (
+      valueN1 !== undefined &&
+      typeof current[lastKey] === "object" &&
+      current[lastKey] !== null
+    ) {
+      // If it's an object with n and n1 properties
+      if ("n" in current[lastKey]) {
+        current[lastKey].n = valueN;
+      }
+      if ("n1" in current[lastKey]) {
+        current[lastKey].n1 = valueN1;
+      }
+    } else {
+      // Direct assignment
+      current[lastKey] = valueN;
+    }
+  }
+
+  // Functions for generating notes from DSF configs
+
+  private async generateNote1FromConfig(
+    n: any[],
+    folder: FolderWithRelations,
+    accountMappings: any[]
+  ): Promise<any> {
+    const baseData = {
+      title: "DETTES GARANTIES PAR DES SURETES REELLES",
+      raisonSociale: folder.client.name,
+      formeJuridique: folder.client.legalForm,
+      activitePrincipale: "À compléter",
+      effectif: 0,
+      dettesGaranties: [],
+    };
+
+    const reportData = this.generateReportFromMappings(
+      n,
+      [],
+      folder,
+      accountMappings,
+      baseData
+    );
+
+    // Process dettesGaranties array
+    const dettesGaranties = accountMappings
+      .filter((mapping) => mapping.destination.startsWith("dettesGaranties."))
+      .map((mapping) => ({
+        compte: mapping.accountNumber,
+        montant: this.getBalanceValue(
+          n,
+          folder,
+          mapping.accountNumber,
+          mapping.source
+        ),
+        garantie:
+          mapping.libelle ||
+          mapping.destination.split(".").pop() ||
+          "À préciser",
+      }));
+
+    reportData.dettesGaranties = dettesGaranties;
+
+    return reportData;
+  }
+
+  private async generateNote3AFromConfig(
+    n: any[],
+    folder: FolderWithRelations,
+    accountMappings: any[]
+  ): Promise<any> {
+    const baseData = {
+      title: "IMMOBILISATIONS BRUTES",
+      immobilisationsIncorporelles: 0,
+      immobilisationsCorporelles: 0,
+      immobilisationsFinancieres: 0,
+      total: 0,
+    };
+
+    const reportData = this.generateReportFromMappings(
+      n,
+      [],
+      folder,
+      accountMappings,
+      baseData
+    );
+
+    // Calculate total
+    reportData.total =
+      reportData.immobilisationsIncorporelles +
+      reportData.immobilisationsCorporelles +
+      reportData.immobilisationsFinancieres;
+
+    return reportData;
+  }
+
+  private async generateNote4FromConfig(
+    n: any[],
+    n1: any[],
+    folder: FolderWithRelations,
+    accountMappings: any[]
+  ): Promise<any> {
+    const baseData = {
+      title: "IMMOBILISATIONS FINANCIERES",
+      titresDeParticipation: { n: 0, n1: 0 },
+      autresTitres: { n: 0, n1: 0 },
+      pretsEtCreances: { n: 0, n1: 0 },
+      total: { n: 0, n1: 0 },
+    };
+
+    const reportData = this.generateReportFromMappings(
+      n,
+      n1,
+      folder,
+      accountMappings,
+      baseData
+    );
+
+    // Calculate totals
+    reportData.total.n =
+      reportData.titresDeParticipation.n +
+      reportData.autresTitres.n +
+      reportData.pretsEtCreances.n;
+    reportData.total.n1 =
+      reportData.titresDeParticipation.n1 +
+      reportData.autresTitres.n1 +
+      reportData.pretsEtCreances.n1;
+
+    return reportData;
+  }
+
+  private async generateNote7FromConfig(
+    n: any[],
+    n1: any[],
+    folder: FolderWithRelations,
+    accountMappings: any[]
+  ): Promise<any> {
+    const baseData = {
+      title: "CLIENTS",
+      clientsOrdinaires: { n: 0, n1: 0 },
+      clientsDouteux: { n: 0, n1: 0 },
+      creancesSurCessions: { n: 0, n1: 0 },
+      provisionsClients: { n: 0, n1: 0 },
+      total: { n: 0, n1: 0 },
+    };
+
+    const reportData = this.generateReportFromMappings(
+      n,
+      n1,
+      folder,
+      accountMappings,
+      baseData
+    );
+
+    // Calculate totals
+    reportData.total.n =
+      reportData.clientsOrdinaires.n +
+      reportData.clientsDouteux.n +
+      reportData.creancesSurCessions.n -
+      reportData.provisionsClients.n;
+    reportData.total.n1 =
+      reportData.clientsOrdinaires.n1 +
+      reportData.clientsDouteux.n1 +
+      reportData.creancesSurCessions.n1 -
+      reportData.provisionsClients.n1;
+
+    return reportData;
+  }
+
+  // Functions for generating tax reports from DSF configs
+
+  private async generateCF1FromConfig(
+    n: any[],
+    folder: FolderWithRelations,
+    accountMappings: any[]
+  ): Promise<any> {
+    const baseData = {
+      headerInfo: {
+        entityName: folder.client.name,
+        fiscalYear: folder.fiscalYear.toString(),
+        idNumber: folder.client.taxNumber || "",
+        duration: "12",
+      },
+      rows: [
+        {
+          id: "1",
+          label: "Bénéfice net comptable avant impôt",
+          line: 1,
+          amount: this.getAccountBalance(n, "13"),
+        },
+        { id: "2", label: "Amortissement non déductible", line: 3, amount: 0 },
+        {
+          id: "3",
+          label:
+            "Amortissement comptable mais réputes différés en période déficitaire",
+          line: 4,
+          amount: 0,
+        },
+        { id: "4", label: "Provisions non déductibles", line: 5, amount: 0 },
+        {
+          id: "5",
+          label: "Intérêt excédentaires des comptes courants d'associés",
+          line: 6,
+          amount: 0,
+        },
+        {
+          id: "6",
+          label: "Frais de siège et d'assistance technique",
+          line: 7,
+          amount: 0,
+        },
+        {
+          id: "7",
+          label: "Impôt non déductibles autres qu'impôt sur le résultat",
+          line: 8,
+          amount: 0,
+        },
+        {
+          id: "8",
+          label: "Amendes et pénalités non déductibles",
+          line: 9,
+          amount: 0,
+        },
+        {
+          id: "9",
+          label: "Pourboires et dons non déductibles",
+          line: 10,
+          amount: 0,
+        },
+        {
+          id: "10",
+          label: "Revenu à la source(IRMC) sur revenus des capitaux mobiliers",
+          line: 12,
+          amount: 0,
+        },
+        { id: "11", label: "Divers 1", line: 13, amount: 0 },
+        { id: "12", label: "Divers 2", line: 14, amount: 0 },
+        { id: "13", label: "Divers 3", line: 15, amount: 0 },
+        {
+          id: "14",
+          label:
+            "Total intermédiaire POSITIF : ligne 15=lignes1ou ligne15ligne2",
+          line: 16,
+          amount: 0,
+        },
+        {
+          id: "15",
+          label: "Total intermédiaire NEGATIF : ligne2=lignes 15",
+          line: 17,
+          amount: 0,
+        },
+        {
+          id: "16",
+          label: "Amortissement antérieur différés et imputés sur l'exercice",
+          line: 18,
+          amount: 0,
+        },
+        {
+          id: "17",
+          label:
+            "Provisions antérieurement taxées ou définitivement exonérées réintégrées dans",
+          line: 19,
+          amount: 0,
+        },
+        {
+          id: "18",
+          label:
+            "Fraction non imposable des plus-values réalisées en fin d'explication",
+          line: 20,
+          amount: 0,
+        },
+        {
+          id: "19",
+          label:
+            "Produit net des filiales (après déduction de la quote-part de frais et charges)",
+          line: 21,
+          amount: 0,
+        },
+        {
+          id: "20",
+          label: "Autres revenus mobiliers déductibles",
+          line: 22,
+          amount: 0,
+        },
+        {
+          id: "21",
+          label: "Frais de siège et d'assistance technique déductible",
+          line: 23,
+          amount: 0,
+        },
+        { id: "22", label: "Divers 1", line: 24, amount: 0 },
+        { id: "23", label: "Divers 2", line: 25, amount: 0 },
+        { id: "24", label: "Total lignes 18 à 26", line: 27, amount: 0 },
+        {
+          id: "25",
+          label: "BÉNÉFICE FISCAL DE L'EXERCICE : ligne 16 - ligne 27",
+          line: 28,
+          amount: 0,
+        },
+        {
+          id: "26",
+          label:
+            "PERTE FISCALE DE L'EXERCICE : ligne 27 - ligne 16 ou ligne 17 +",
+          line: 29,
+          amount: 0,
+        },
+      ],
+      rubriques: [
+        {
+          id: "1",
+          label: "Impôt sur les sociétés",
+          line: 31,
+          minimum: "Minimum de perception",
+          base: "30%",
+          rate: "30%",
+          principal: "",
+        },
+        {
+          id: "2",
+          label: "BIC et BNC",
+          line: 32,
+          minimum: "",
+          base: "",
+          rate: "22%",
+          principal: "",
+        },
+        {
+          id: "3",
+          label: "",
+          line: 33,
+          minimum: "",
+          base: "",
+          rate: "",
+          principal: "",
+        },
+        {
+          id: "4",
+          label: "Bénéfice artisanaux",
+          line: 34,
+          minimum: "",
+          base: "",
+          rate: "11%",
+          principal: "",
+        },
+        {
+          id: "5",
+          label: "",
+          line: 35,
+          minimum: "",
+          base: "",
+          rate: "",
+          principal: "",
+        },
+        {
+          id: "6",
+          label: "Bénéfices agricoles",
+          line: 36,
+          minimum: "",
+          base: "",
+          rate: "15%",
+          principal: "",
+        },
+        {
+          id: "7",
+          label: "",
+          line: 37,
+          minimum: "",
+          base: "",
+          rate: "",
+          principal: "",
+        },
+        {
+          id: "8",
+          label: "TOTAL lignes 32 à 38",
+          line: 39,
+          minimum: "",
+          base: "",
+          rate: "",
+          principal: "",
+        },
+      ],
+    };
+
+    // Apply account mappings to CF1 rows
+    accountMappings.forEach((mapping: any) => {
+      const value = this.getBalanceValue(
+        n,
+        folder,
+        mapping.accountNumber,
+        mapping.source
+      );
+      const row = baseData.rows.find((r: any) => r.id === mapping.destination);
+      if (row) {
+        row.amount = value;
+      }
+    });
+
+    // Calculate totals
+    const reintegrationsSum = baseData.rows
+      .slice(1, 13)
+      .reduce((sum: number, row: any) => sum + row.amount, 0);
+    const deductionsSum = baseData.rows
+      .slice(15, 24)
+      .reduce((sum: number, row: any) => sum + row.amount, 0);
+    const beneficeFiscal = baseData.rows[13].amount - deductionsSum;
+    const perteFiscal = deductionsSum - baseData.rows[13].amount;
+
+    baseData.rows[12].amount = reintegrationsSum; // Line 15
+    baseData.rows[23].amount = deductionsSum; // Line 27
+    baseData.rows[24].amount = beneficeFiscal; // Line 28
+    baseData.rows[25].amount = perteFiscal; // Line 29
+
+    return baseData;
+  }
+
+  private async generateCF2FromConfig(
+    n: any[],
+    folder: FolderWithRelations,
+    accountMappings: any[]
+  ): Promise<any> {
+    const ca = this.sumAccounts(n, ["70", "71"]);
+    const tvaBrute = ca * 0.1925;
+    const baseData = {
+      title: "CALCUL DE REGULARISATION ANNUELLE DE LA TVA",
+      chiffreAffairesHT: ca,
+      tvaBrute,
+      tvaDeductible: 0,
+      tvaNette: tvaBrute,
+    };
+
+    // Apply account mappings
+    accountMappings.forEach((mapping: any) => {
+      const value = this.getBalanceValue(
+        n,
+        folder,
+        mapping.accountNumber,
+        mapping.source
+      );
+      if (mapping.destination === "tvaDeductible") {
+        baseData.tvaDeductible = value;
+        baseData.tvaNette = baseData.tvaBrute - value;
+      }
+    });
+
+    return baseData;
+  }
+
+  private generateNote2FromConfig(): any {
+    return {
+      title: "INFORMATIONS OBLIGATOIRES",
+      baseEvaluation: "Coûts historiques",
+      methodesAmortissement: "Linéaire",
+      methodesProvisions: "Au cas par cas",
+    };
+  }
+
+  private generateNote3BFromConfig(n: any[], n1: any[]): any {
+    const debutExercice = this.sumAccounts(n1, [
+      "21",
+      "22",
+      "23",
+      "24",
+      "25",
+      "26",
+      "27",
+    ]);
+    const finExercice = this.sumAccounts(n, [
+      "21",
+      "22",
+      "23",
+      "24",
+      "25",
+      "26",
+      "27",
+    ]);
+
+    return {
+      title: "BIENS PRIS EN LOCATION ACQUISITION",
+      debutExercice,
+      acquisitions: 0,
+      cessions: 0,
+      finExercice,
+      tableauDetails: [],
+    };
+  }
+
+  private generateNote3CFromConfig(n: any[]): any {
+    return {
+      title: "IMMOBILISATIONS: AMORTISSEMENTS",
+      amortissementsCumules: this.sumAccounts(n, [
+        "281",
+        "282",
+        "283",
+        "284",
+        "285",
+      ]),
+      dotationsExercice: this.sumAccounts(n, ["681"]),
+      reprisesExercice: 0,
+    };
+  }
+
+  private generateNote5FromConfig(n: any[]): any {
+    return {
+      title: "ACTIF CIRCULANT HAO",
+      actifCirculantHAO: this.sumAccounts(n, ["485"]),
+      details: [],
+    };
+  }
+
+  private generateNote6FromConfig(n: any[], n1: any[]): any {
+    return {
+      title: "STOCKS ET ENCOURS",
+      marchandises: {
+        n: this.sumAccounts(n, ["31"]),
+        n1: this.sumAccounts(n1, ["31"]),
+      },
+      matieresPremieres: {
+        n: this.sumAccounts(n, ["32"]),
+        n1: this.sumAccounts(n1, ["32"]),
+      },
+      autresApprovisionnements: {
+        n: this.sumAccounts(n, ["33"]),
+        n1: this.sumAccounts(n1, ["33"]),
+      },
+      enCours: {
+        n: this.sumAccounts(n, ["34", "35"]),
+        n1: this.sumAccounts(n1, ["34", "35"]),
+      },
+      produitsFinis: {
+        n: this.sumAccounts(n, ["36"]),
+        n1: this.sumAccounts(n1, ["36"]),
+      },
+      total: {
+        n: this.sumAccounts(n, [
+          "31",
+          "32",
+          "33",
+          "34",
+          "35",
+          "36",
+          "37",
+          "38",
+        ]),
+        n1: this.sumAccounts(n1, [
+          "31",
+          "32",
+          "33",
+          "34",
+          "35",
+          "36",
+          "37",
+          "38",
+        ]),
+      },
+    };
+  }
+
+  private generateNote8FromConfig(n: any[], n1: any[]): any {
+    return {
+      title: "AUTRES CREANCES",
+      fournisseursDebiteurs: {
+        n: this.sumAccounts(n, ["4091", "4092"]),
+        n1: this.sumAccounts(n1, ["4091", "4092"]),
+      },
+      personnel: {
+        n: this.sumAccounts(n, [
+          "421",
+          "422",
+          "423",
+          "424",
+          "425",
+          "426",
+          "427",
+          "428",
+        ]),
+        n1: this.sumAccounts(n1, [
+          "421",
+          "422",
+          "423",
+          "424",
+          "425",
+          "426",
+          "427",
+          "428",
+        ]),
+      },
+      etat: {
+        n: this.sumAccounts(n, [
+          "441",
+          "442",
+          "443",
+          "444",
+          "445",
+          "446",
+          "447",
+        ]),
+        n1: this.sumAccounts(n1, [
+          "441",
+          "442",
+          "443",
+          "444",
+          "445",
+          "446",
+          "447",
+        ]),
+      },
+      comptesDeLiaison: {
+        n: this.sumAccounts(n, ["45"]),
+        n1: this.sumAccounts(n1, ["45"]),
+      },
+      autresCreances: {
+        n: this.sumAccounts(n, ["46", "47", "48"]),
+        n1: this.sumAccounts(n1, ["46", "47", "48"]),
+      },
+      total: {
+        n: this.sumAccounts(n, ["42", "43", "44", "45", "46", "47", "48"]),
+        n1: this.sumAccounts(n1, ["42", "43", "44", "45", "46", "47", "48"]),
+      },
+    };
+  }
+
+  private generateNote9FromConfig(n: any[]): any {
+    return {
+      title: "TITRES DE PLACEMENT",
+      titresDePlacement: this.sumAccounts(n, ["50"]),
+      provisions: this.sumAccounts(n, ["590"]),
+      valeurNette: this.calculateNet(n, ["50"], ["590"]),
+    };
+  }
+
+  private generateNote10FromConfig(n: any[]): any {
+    return {
+      title: "VALEURS A ENCAISSER",
+      effetsARecevoir: this.sumAccounts(n, ["413", "414"]),
+      chequesAEncaisser: this.sumAccounts(n, ["513"]),
+      couponsAEncaisser: this.sumAccounts(n, ["515"]),
+      total: this.sumAccounts(n, ["413", "414", "513", "515"]),
+    };
+  }
+
+  private generateNote11FromConfig(n: any[]): any {
+    return {
+      title: "DISPONIBILITES",
+      banques: this.sumAccounts(n, ["521", "522", "523", "524", "526"]),
+      ccp: this.sumAccounts(n, ["531"]),
+      caisse: this.sumAccounts(n, ["57"]),
+      regiesAvances: this.sumAccounts(n, ["58"]),
+      total: this.sumAccounts(n, ["52", "53", "57", "58"]),
+    };
+  }
+
+  private generateNote17FromConfig(n: any[]): any {
+    return {
+      title: "FOURNISSEURS D'EXPLOITATION",
+      fournisseursOrdinaires: this.sumAccounts(n, ["401", "402"]),
+      fournisseursEffetsAPayer: this.sumAccounts(n, ["403", "404", "405"]),
+      fournisseursRetenues: this.sumAccounts(n, ["408"]),
+      total: this.sumAccounts(n, [
+        "401",
+        "402",
+        "403",
+        "404",
+        "405",
+        "406",
+        "408",
+      ]),
+    };
+  }
+
+  private generateNote18FromConfig(n: any[]): any {
+    return {
+      title: "DETTES FISCALES ET SOCIALES",
+      dettesFiscales: {
+        tva: this.sumAccounts(n, ["4431", "4432", "4433", "4434", "4435"]),
+        impotsSurSalaires: this.sumAccounts(n, ["4471", "4472", "4473"]),
+        impotsSurResultat: this.sumAccounts(n, ["444"]),
+        autresImpots: this.sumAccounts(n, ["441", "442", "445", "446", "447"]),
+      },
+      dettesSociales: {
+        cnps: this.sumAccounts(n, ["431", "432", "433"]),
+        personnel: this.sumAccounts(n, [
+          "421",
+          "422",
+          "423",
+          "424",
+          "425",
+          "426",
+          "427",
+          "428",
+        ]),
+      },
+      total: this.sumAccounts(n, ["42", "43", "44"]),
+    };
+  }
+
+  private generateNote21FromConfig(n: any[], n1: any[]): any {
+    return {
+      title: "CHIFFRE D'AFFAIRES ET AUTRES PRODUITS",
+      ventesMarchandises: {
+        n: this.sumAccounts(n, ["701"]),
+        n1: this.sumAccounts(n1, ["701"]),
+      },
+      ventesProduits: {
+        n: this.sumAccounts(n, ["702", "703", "704"]),
+        n1: this.sumAccounts(n1, ["702", "703", "704"]),
+      },
+      travaux: {
+        n: this.sumAccounts(n, ["705"]),
+        n1: this.sumAccounts(n1, ["705"]),
+      },
+      services: {
+        n: this.sumAccounts(n, ["706", "707"]),
+        n1: this.sumAccounts(n1, ["706", "707"]),
+      },
+      produitsDivers: {
+        n: this.sumAccounts(n, ["708"]),
+        n1: this.sumAccounts(n1, ["708"]),
+      },
+      rabaisRemises: {
+        n: this.sumAccounts(n, ["709"]),
+        n1: this.sumAccounts(n1, ["709"]),
+      },
+      total: {
+        n: this.sumAccounts(n, ["70"]),
+        n1: this.sumAccounts(n1, ["70"]),
+      },
+    };
+  }
+
+  private generateNote27AFromConfig(n: any[], n1: any[]): any {
+    return {
+      title: "CHARGES DE PERSONNEL",
+      salairesEtTraitements: {
+        n: this.sumAccounts(n, ["661", "662", "663", "664"]),
+        n1: this.sumAccounts(n1, ["661", "662", "663", "664"]),
+      },
+      chargesSociales: {
+        n: this.sumAccounts(n, ["665", "666", "667"]),
+        n1: this.sumAccounts(n1, ["665", "666", "667"]),
+      },
+      autresCharges: {
+        n: this.sumAccounts(n, ["668"]),
+        n1: this.sumAccounts(n1, ["668"]),
+      },
+      total: {
+        n: this.sumAccounts(n, ["66"]),
+        n1: this.sumAccounts(n1, ["66"]),
+      },
+    };
+  }
+
+  private generateNote28FromConfig(n: any[]): any {
+    return {
+      title: "PROVISIONS ET DEPRECIATIONS INSCRITES AU BILAN",
+      provisions: {
+        exploitation: this.sumAccounts(n, ["691"]),
+        financieres: this.sumAccounts(n, ["697"]),
+        hao: this.sumAccounts(n, ["857"]),
+      },
+      depreciations: {
+        exploitation: this.sumAccounts(n, ["691"]),
+        financieres: this.sumAccounts(n, ["697"]),
+        hao: this.sumAccounts(n, ["857"]),
+      },
+      total: this.sumAccounts(n, ["691", "697", "857"]),
+    };
+  }
+
+  // Tax report functions
+
+  private generateCF1BisFromConfig(n: any[]): any {
+    return {
+      title:
+        "TABLEAU DE DETERMINATION DE L'IMPOT SUR LE RESULTAT: MINIMUM DE PERCEPTION",
+      chiffreAffaires: this.sumAccounts(n, ["70", "71"]),
+      minimumPerception: this.sumAccounts(n, ["70", "71"]) * 0.011,
+    };
+  }
+
+  private generateCF1TerFromConfig(n: any[]): any {
+    return {
+      title: "MINIMUM DE PERCEPTION",
+      chiffreAffairesHT: this.sumAccounts(n, ["70", "71"]),
+      tauxMinimum: 0.011,
+      minimumCalcule: this.sumAccounts(n, ["70", "71"]) * 0.011,
+    };
+  }
+
+  private generateCF1QuaterFromConfig(): any {
+    return {
+      title:
+        "RECAPITULATIF DES VERSEMENTS D'ACOMPTES ET DE RETENUES SUBIES D'IMPOT SOCIETE ET D'ERENCE",
+      acomptesVerses: 0,
+      retenuesSubies: 0,
+      total: 0,
+    };
+  }
+
+  private generateCF2BisFromConfig(): any {
+    return {
+      title: "RECAPITULATIF DES VERSEMENTS EFFECTUES ET RETENUS SUBIES",
+      versementsMensuels: [],
+      total: 0,
+    };
+  }
+
+  private generateCF2TerFromConfig(): any {
+    return {
+      title: "SITUATION NETTE DE TVA",
+      tvaDue: 0,
+      tvaPayee: 0,
+      solde: 0,
+    };
+  }
+
+  /**
+   * Generate all reports from DSF configs
+   */
+  async generateAllReportsFromConfigs(
+    folder: FolderWithRelations,
+    nData: any,
+    n1Data: any
+  ): Promise<any> {
+    const n = nData.rows || [];
+    const n1 = n1Data?.rows || [];
+
+    // Get all DSF configs for this folder/client
+    const configs = await this.getAllConfigsForFolder(folder);
+
+    const reports: any = {};
+
+    // Generate each report based on available configs
+    for (const config of configs) {
+      const accountMappings = config.accountMappings || [];
+
+      switch (config.category.toLowerCase()) {
+        case "note1":
+          reports.note1 = await this.generateNote1FromConfig(
+            n,
+            folder,
+            accountMappings
+          );
+          break;
+        case "note3a":
+          reports.note3A = await this.generateNote3AFromConfig(
+            n,
+            folder,
+            accountMappings
+          );
+          break;
+        case "note4":
+          reports.note4 = await this.generateNote4FromConfig(
+            n,
+            n1,
+            folder,
+            accountMappings
+          );
+          break;
+        case "note7":
+          reports.note7 = await this.generateNote7FromConfig(
+            n,
+            n1,
+            folder,
+            accountMappings
+          );
+          break;
+        case "cf1":
+          reports.cf1 = await this.generateCF1FromConfig(
+            n,
+            folder,
+            accountMappings
+          );
+          break;
+        case "cf2":
+          reports.cf2 = await this.generateCF2FromConfig(
+            n,
+            folder,
+            accountMappings
+          );
+          break;
+        // Add more cases for other notes and reports
+        default:
+          // For notes/reports without specific config-based generation, use default
+          break;
+      }
+    }
+
+    // Generate notes that don't have configs with default values
+    reports.note2 = this.generateNote2FromConfig();
+    reports.note3B = this.generateNote3BFromConfig(n, n1);
+    reports.note3C = this.generateNote3CFromConfig(n);
+    reports.note5 = this.generateNote5FromConfig(n);
+    reports.note6 = this.generateNote6FromConfig(n, n1);
+    reports.note8 = this.generateNote8FromConfig(n, n1);
+    reports.note9 = this.generateNote9FromConfig(n);
+    reports.note10 = this.generateNote10FromConfig(n);
+    reports.note11 = this.generateNote11FromConfig(n);
+    reports.note17 = this.generateNote17FromConfig(n);
+    reports.note18 = this.generateNote18FromConfig(n);
+    reports.note21 = this.generateNote21FromConfig(n, n1);
+    reports.note27A = this.generateNote27AFromConfig(n, n1);
+    reports.note28 = this.generateNote28FromConfig(n);
+
+    // Generate tax reports
+    reports.cf1Bis = this.generateCF1BisFromConfig(n);
+    reports.cf1Ter = this.generateCF1TerFromConfig(n);
+    reports.cf1Quater = this.generateCF1QuaterFromConfig();
+    reports.cf2Bis = this.generateCF2BisFromConfig();
+    reports.cf2Ter = this.generateCF2TerFromConfig();
+
+    return reports;
+  }
+
+  /**
+   * Get all DSF configs for a folder
+   */
+  private async getAllConfigsForFolder(
+    folder: FolderWithRelations
+  ): Promise<any[]> {
+    // Import prisma here to avoid circular dependencies
+    const { prisma } = require("../lib/prisma");
+
+    // Get configs by folder ID
+    const configs = await prisma.DSFComptableConfig.findMany({
+      where: {
+        OR: [
+          { exerciseId: folder.id },
+          { clientId: folder.clientId, exerciseId: null },
+          { ownerType: "SYSTEM" },
+        ],
+        isActive: true,
+      },
+      include: {
+        config: {
+          include: {
+            accountMappings: true,
+          },
+        },
+      },
+    });
+
+    return configs.map((c) => ({
+      ...c,
+      category: c.config?.category || "unknown",
+      accountMappings: c.accountMappings || [],
+    }));
+  }
+
+  // Assurance-specific note generation methods
+  private generateBilanActif(n: any[]): any {
+    return {
+      title: "Bilan Actif - Assurance",
+      description: "État de l'actif pour les entreprises d'assurance",
+      // Add specific logic for assurance bilan actif
+    };
+  }
+
+  private generateBilanPassif(n: any[]): any {
+    return {
+      title: "Bilan Passif - Assurance",
+      description: "État du passif pour les entreprises d'assurance",
+      // Add specific logic for assurance bilan passif
+    };
+  }
+
+  private generateCharges(n: any[]): any {
+    return {
+      title: "Charges d'Exploitation Assurance",
+      description: "Charges d'exploitation spécifiques aux assurances",
+      // Add specific logic for assurance charges
+    };
+  }
+
+  private generateCompteGeneral(n: any[]): any {
+    return {
+      title: "Compte de Résultat Général",
+      description: "État des résultats généraux pour assurances",
+      // Add specific logic for assurance compte general
+    };
+  }
+
+  private generateEtatC4(n: any[]): any {
+    return {
+      title: "État C4 Sectoriel",
+      description: "État réglementaire C4 pour les assurances",
+      // Add specific logic for assurance etat C4
+    };
+  }
+
+  private generateEtatC11(n: any[]): any {
+    return {
+      title: "État C11 Sectoriel",
+      description: "État réglementaire C11 pour les assurances",
+      // Add specific logic for assurance etat C11
+    };
+  }
+
+  private generateEtatC11Vie(n: any[]): any {
+    return {
+      title: "État C11 Vie Sectoriel",
+      description: "État réglementaire C11 Vie pour les assurances",
+      // Add specific logic for assurance etat C11 vie
+    };
+  }
+
+  private generateProduits(n: any[]): any {
+    return {
+      title: "Produits d'Exploitation Assurance",
+      description: "Produits d'exploitation spécifiques aux assurances",
+      // Add specific logic for assurance produits
+    };
+  }
+
+  // SMT-specific note generation methods
+  private generateGrilleAnalyseNotesSMT(n: any[]): any {
+    return {
+      title: "Grille d'Analyse des Notes SMT",
+      description:
+        "Grille d'analyse structurée des notes pour les sociétés de microfinance",
+      // Add specific logic for SMT grille analyse notes
+    };
+  }
+
+  private generateModBilan(n: any[]): any {
+    return {
+      title: "Modèle de Bilan SMT",
+      description: "Modèle de bilan pour les sociétés de microfinance",
+      // Add specific logic for SMT mod bilan
+    };
+  }
+
+  private generateNote1Smt(n: any[]): any {
+    return {
+      title: "Sommaire du Matériel SMT",
+      description: "Sommaire du matériel, mobilier et cautions pour SMT",
+      // Add specific logic for SMT note 1
+    };
+  }
+
+  private generateNote2Smt(n: any[]): any {
+    return {
+      title: "États des Stocks SMT",
+      description: "États des stocks pour les sociétés de microfinance",
+      // Add specific logic for SMT note 2
+    };
+  }
+
+  private generateNote3Smt(n: any[]): any {
+    return {
+      title: "Créances et Dettes SMT",
+      description: "État des créances et dettes non échues pour SMT",
+      // Add specific logic for SMT note 3
+    };
+  }
+
+  private generateNote4Smt(n: any[]): any {
+    return {
+      title: "Journal Trésorerie SMT",
+      description: "Journal des trésoreries pour les sociétés de microfinance",
+      // Add specific logic for SMT note 4
+    };
+  }
+
+  private generateNote5Smt(n: any[]): any {
+    return {
+      title: "Créances Impayées SMT",
+      description: "Journal des sommes des créances impayées pour SMT",
+      // Add specific logic for SMT note 5
+    };
+  }
+
+  private generateNote6Smt(n: any[]): any {
+    return {
+      title: "Dettes à Payer SMT",
+      description: "Journal des sommes des dettes à payer pour SMT",
+      // Add specific logic for SMT note 6
+    };
   }
 }

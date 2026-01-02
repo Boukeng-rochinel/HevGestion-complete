@@ -51,6 +51,9 @@ model User {
   // DSF reports managed by this user
   managedDSFs DSF[]
 
+  // DSF Mapping configurations
+  dsfMappingConfigs DSFMappingConfig[]
+
   // Audit logs
   auditLogs AuditLog[]
 
@@ -61,20 +64,21 @@ model User {
 }
 
 model Client {
-  id        String   @id @default(cuid())
+  id        String     @id @default(cuid())
   name      String
   legalForm LegalForm
+  clientType ClientType @default(NORMAL)
   taxNumber String?
   address   String?
   city      String?
   phone     String?
   country   CountrySelection
   currency  String
-  createdBy String   // Links to User id
-  
+  createdBy String     // Links to User id
+
   // Add relation to User for createdBy
-  creator   User?    @relation("ClientCreator", fields: [createdBy], references: [id])
-  
+  creator   User?      @relation("ClientCreator", fields: [createdBy], references: [id])
+
   folders   Folder[]
 
   // Audit logs
@@ -107,6 +111,7 @@ model Folder {
   // Balance data
   balances        Balance[]
   dsf             DSF?
+  dsfImports      DSFImport[]
   taxDeclarations TaxDeclaration[]
 
   // DSF Configurations
@@ -234,19 +239,46 @@ model DSF {
   userId   String?
   user     User?     @relation(fields: [userId], references: [id])
 
-  // LEGACY JSON FIELDS - Keep for backward compatibility during migration
-  balanceSheet    Json?
-  incomeStatement Json?
-  taxTables       Json?
-  notes           Json? // Notes 1-35+
-  signaletics     Json? // R1, R2, R3, R4, R4bis
-
-  // NEW STRUCTURED TABLES - For better management
-  structuredNotes       DSFNotes[]
-  structuredSignaletics DSFSignaletics[]
-  structuredBalanceSheets   DSFBalanceSheet[]
-  structuredIncomeStatements DSFIncomeStatement[]
-  structuredTaxTables       DSFTaxTable[]
+  // Individual report fields
+  note1   Json?
+  note2   Json?
+  note3a  Json?
+  note3b  Json?
+  note4   Json?
+  note5   Json?
+  note6   Json?
+  note7   Json?
+  note8   Json?
+  note9   Json?
+  note10  Json?
+  note11  Json?
+  note12  Json?
+  note13  Json?
+  note14  Json?
+  note15  Json?
+  note16  Json?
+  note17  Json?
+  note18  Json?
+  note19  Json?
+  note20  Json?
+  note21  Json?
+  note22  Json?
+  note23  Json?
+  note24  Json?
+  note25  Json?
+  note26  Json?
+  note27  Json?
+  note28  Json?
+  note29  Json?
+  note30  Json?
+  note31  Json?
+  note32  Json?
+  note33  Json?
+  fiche1  Json?
+  fiche2  Json?
+  fiche3  Json?
+  cter    Json?
+  cf1     Json?
 
   // Controls
   coherenceControl CoherenceControl?
@@ -258,134 +290,6 @@ model DSF {
   @@map("dsf")
 }
 
-// Individual DSF Notes (Note1, Note2, ..., Note10)
-model DSFNotes {
-  id          String   @id @default(uuid())
-  dsfId       String
-  dsf         DSF      @relation(fields: [dsfId], references: [id], onDelete: Cascade)
-
-  noteType    DSFNoteType // NOTE1, NOTE2, etc.
-  version     Int      @default(1) // For versioning
-
-  // Structured data instead of JSON
-  headerInfo  Json? // Entity info, fiscal year, etc.
-  debts       Json? // Financial debts data
-  commitments Json? // Financial commitments
-  comment     String?
-
-  // Metadata
-  isActive    Boolean  @default(true)
-  createdBy   String   // User ID
-  updatedBy   String?  // User ID
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([dsfId, noteType, version])
-  @@index([dsfId, noteType])
-  @@map("dsf_notes")
-}
-
-// DSF Signaletics (Fiches R1, R2, R3, R4, R4bis)
-model DSFSignaletics {
-  id          String   @id @default(uuid())
-  dsfId       String
-  dsf         DSF      @relation(fields: [dsfId], references: [id], onDelete: Cascade)
-
-  ficheType   DSFFicheType // R1, R2, R3, R4, R4BIS
-  version     Int      @default(1) // For versioning
-
-  // Structured data instead of JSON
-  data        Json? // Fiche-specific structured data
-
-  // Metadata
-  isActive    Boolean  @default(true)
-  createdBy   String   // User ID
-  updatedBy   String?  // User ID
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([dsfId, ficheType, version])
-  @@index([dsfId, ficheType])
-  @@map("dsf_signaletics")
-}
-
-// DSF Balance Sheet
-model DSFBalanceSheet {
-  id          String   @id @default(uuid())
-  dsfId       String
-  dsf         DSF      @relation(fields: [dsfId], references: [id], onDelete: Cascade)
-
-  version     Int      @default(1)
-
-  // Structured balance sheet data
-  assets      Json? // Actif data
-  liabilities Json? // Passif data
-
-  // Metadata
-  isActive    Boolean  @default(true)
-  createdBy   String   // User ID
-  updatedBy   String?  // User ID
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([dsfId, version])
-  @@index([dsfId])
-  @@map("dsf_balance_sheets")
-}
-
-// DSF Income Statement
-model DSFIncomeStatement {
-  id          String   @id @default(uuid())
-  dsfId       String
-  dsf         DSF      @relation(fields: [dsfId], references: [id], onDelete: Cascade)
-
-  version     Int      @default(1)
-
-  // Structured income statement data
-  revenues    Json? // Products data
-  expenses    Json? // Charges data
-  result      Json? // Result data
-
-  // Metadata
-  isActive    Boolean  @default(true)
-  createdBy   String   // User ID
-  updatedBy   String?  // User ID
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([dsfId, version])
-  @@index([dsfId])
-  @@map("dsf_income_statements")
-}
-
-// DSF Tax Tables
-model DSFTaxTable {
-  id          String   @id @default(uuid())
-  dsfId       String
-  dsf         DSF      @relation(fields: [dsfId], references: [id], onDelete: Cascade)
-
-  tableType   DSFTaxTableType // TVA, IS, etc.
-  version     Int      @default(1)
-
-  // Structured tax table data
-  data        Json?
-
-  // Metadata
-  isActive    Boolean  @default(true)
-  createdBy   String   // User ID
-  updatedBy   String?  // User ID
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([dsfId, tableType, version])
-  @@index([dsfId, tableType])
-  @@map("dsf_tax_tables")
-}
 
 model CoherenceControl {
   id    String @id @default(uuid())
@@ -435,6 +339,7 @@ model DSFConfig {
   // Relations to comptable and system configs
   comptableConfigs DSFComptableConfig[]
   systemConfig     DSFSystemConfig?
+  accountMappings  DSFAccountMapping[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -509,6 +414,30 @@ model DSFSystemConfig {
   updatedAt DateTime @updatedAt
 
   @@map("dsf_system_configs")
+}
+
+// ========== DSF ACCOUNT MAPPING ==========
+model DSFAccountMapping {
+  id          String @id @default(uuid())
+  configId    String
+  config      DSFConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+
+  // Account mapping details
+  accountNumber String // Account number from balance (e.g., "101", "201", "31")
+  source        BalanceSource // Which balance column to use
+  destination   String // Excel cell reference (e.g., "B5", "C12")
+
+  // Metadata
+  isActive     Boolean @default(true)
+  createdBy    String  // User ID
+  updatedBy    String? // User ID
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([configId, accountNumber, source])
+  @@index([configId])
+  @@map("dsf_account_mappings")
 }
 
 // ========== DSF CONFIG IMPORT/EXPORT ==========
@@ -589,6 +518,195 @@ model AuditLog {
   @@map("audit_logs")
 }
 
+// ========== DSF MAPPING CONFIGURATION ==========
+
+model DSFMappingPreset {
+  id          String @id @default(uuid())
+  name        String
+  description String?
+  configId    String
+  config      DSFMappingConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+
+  // Preset metadata
+  category    String // "OHADA", "Custom", etc.
+  version     String @default("1.0")
+  isPublic    Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([configId])
+  @@map("dsf_mapping_presets")
+}
+
+// ========== DSF IMPORT & MATCHING ==========
+
+// DSF Import tracking
+model DSFImport {
+  id            String   @id @default(cuid())
+  folderId      String
+  fileName      String
+  fileUrl       String
+  exerciseYear  Int
+  importedBy    String
+  importedAt    DateTime @default(now())
+  status        String   @default("processing") // processing, completed, failed
+  totalSheets   Int      @default(0)
+  processedSheets Int    @default(0)
+
+  folder        Folder   @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  sheets        DSFSheet[]
+  entries       DSFEntry[]
+
+  @@index([folderId])
+  @@index([exerciseYear])
+
+  @@map("dsf_imports")
+}
+
+// Individual sheets from DSF
+model DSFSheet {
+  id              String   @id @default(cuid())
+  importId        String
+  sheetName       String
+  sheetType       String?  // "note-1", "bilan-actif", "compte-resultat", etc.
+  detectedType    String?  // Auto-detected type
+  matchConfidence Float?   // 0-100
+  rowCount        Int      @default(0)
+  processed       Boolean  @default(false)
+
+  import          DSFImport @relation(fields: [importId], references: [id], onDelete: Cascade)
+  entries         DSFEntry[]
+
+  @@index([importId])
+  @@index([sheetType])
+
+  @@map("dsf_sheets")
+}
+
+// Core data entries from DSF
+model DSFEntry {
+  id                String   @id @default(cuid())
+  importId          String
+  sheetId           String
+
+  // Excel position info
+  rowNumber         Int
+  columnLetter      String?
+  cellReference     String?  // e.g., "A5"
+
+  // Account information
+  accountNumber     String?
+  libelle           String   // The label/description
+  libelleNormalized String?  // Cleaned version for matching
+
+  // Values (multiple columns for N, N-1, N-2)
+  valueN            Decimal? @db.Decimal(15, 2)
+  valueN1           Decimal? @db.Decimal(15, 2)
+  valueN2           Decimal? @db.Decimal(15, 2)
+
+  // Matching information
+  matchedNoteType   String?  // Which note this belongs to
+  matchedFieldId    String?  // Reference to template field
+  matchConfidence   Float?   // 0-100
+  isManualMatch     Boolean  @default(false)
+  isVerified        Boolean  @default(false)
+
+  // Metadata
+  section           String?  // Section within note (e.g., "immobilisations", "stocks")
+  isHeader          Boolean  @default(false)
+  isSubtotal        Boolean  @default(false)
+  isTotal           Boolean  @default(false)
+
+  import            DSFImport @relation(fields: [importId], references: [id], onDelete: Cascade)
+  sheet             DSFSheet  @relation(fields: [sheetId], references: [id], onDelete: Cascade)
+  corrections       DSFEntryCorrection[]
+
+  @@index([importId])
+  @@index([sheetId])
+  @@index([accountNumber])
+  @@index([matchedNoteType])
+  @@index([libelleNormalized])
+
+  @@map("dsf_entries")
+}
+
+// User corrections for learning
+model DSFEntryCorrection {
+  id              String   @id @default(cuid())
+  entryId         String
+
+  originalMatch   String?
+  correctedMatch  String
+  correctedBy     String
+  correctedAt     DateTime @default(now())
+  reason          String?
+
+  entry           DSFEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+
+  @@index([entryId])
+
+  @@map("dsf_entry_corrections")
+}
+
+// Reference mapping configuration
+model DSFMappingConfig {
+  id              String   @id @default(cuid())
+  noteType        String   @unique // "note-1", "note-3a", etc.
+  sheetNamePatterns String[] // ["Note 1", "Note1", "Dettes garanties"]
+
+  // Owner and scope
+  ownerId         String?
+  owner           User?   @relation(fields: [ownerId], references: [id])
+  isSystem        Boolean @default(false) // System default vs user custom
+  isActive        Boolean @default(true)
+
+  fields          DSFFieldMapping[]
+  presets         DSFMappingPreset[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([noteType])
+  @@index([ownerId])
+
+  @@map("dsf_mapping_configs")
+}
+
+// Field-level mapping rules
+model DSFFieldMapping {
+  id              String   @id @default(cuid())
+  configId        String
+
+  fieldId         String   // Unique identifier for field
+  fieldName       String   // Display name
+  libellePatterns String[] // ["Dettes financières", "Emprunts", etc.]
+  accountPatterns String[] // ["16", "17", "506", etc.]
+
+  // Cell reference mapping
+  cellReference   String?  // Excel cell reference (e.g., "E6", "F2")
+  headerPattern   String?  // Pattern to match header for column detection
+
+  sectionName     String?  // Group fields by section
+  isRequired      Boolean  @default(false)
+  dataType        String   @default("number") // number, text, date, etc.
+
+  // Validation
+  validationRegex String?
+  minValue        Float?
+  maxValue        Float?
+
+  config          DSFMappingConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([configId])
+  @@index([fieldId])
+
+  @@map("dsf_field_mappings")
+}
+
 // ========== ENUMS ==========
 enum UserRole {
   ASSISTANT
@@ -611,6 +729,12 @@ enum LegalForm {
   SUARL
   INDIVIDUAL
   OTHER
+}
+
+enum ClientType {
+  NORMAL     // Entreprises classiques
+  ASSURANCE  // Sociétés d'assurance
+  SMT        // Sociétés de Microfinance
 }
 
 enum FolderStatus {
@@ -678,33 +802,6 @@ enum DSFStatus {
   EXPORTED
 }
 
-enum DSFNoteType {
-  NOTE1
-  NOTE2
-  NOTE3
-  NOTE4
-  NOTE5
-  NOTE6
-  NOTE7
-  NOTE8
-  NOTE9
-  NOTE10
-}
-
-enum DSFFicheType {
-  R1
-  R2
-  R3
-  R4
-  R4BIS
-}
-
-enum DSFTaxTableType {
-  TVA
-  IS
-  IRPP
-  TAXES_DIVERSES
-}
 
 enum TaxType {
   TVA
@@ -733,6 +830,17 @@ enum ConfigOwnerType {
   SYSTEM      // System default configs
   ACCOUNTANT  // Accountant-specific configs
   ADMIN       // Admin-created configs
+}
+
+enum BalanceSource {
+  OC   // Opening Credit
+  OD   // Opening Debit
+  MC   // Movement Credit
+  MD   // Movement Debit
+  SD   // Closing Debit
+  SC   // Closing Credit
+  MCD  // Movement Debit/Credit (net)
+  SCD  // Closing Debit/Credit (net)
 }
 
 // ========== AUDIT LOG ENUMS ==========

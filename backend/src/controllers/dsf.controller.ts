@@ -4,17 +4,16 @@ import { AuthRequest } from "../middleware/auth.middleware";
 import { prisma } from "../lib/prisma";
 import { BadRequestError, NotFoundError } from "../lib/errors";
 import { DSFGenerator } from "../services/dsf-generator.service";
+import { DSFValidationService } from "../services/dsf-validation.service";
 import {
   DSFStatus,
   FolderStatus,
   BalanceStatus,
   BalanceType,
-  DSFNoteType,
-  DSFFicheType,
-  DSFTaxTableType,
 } from "@prisma/client";
 import * as path from "path";
 import * as XLSX from "xlsx";
+import * as fs from "fs/promises";
 
 // Type pour les relations complètes du dossier
 type FolderWithFullRelations = {
@@ -74,8 +73,8 @@ type FolderWithFullRelations = {
 
 class DSFController {
   private dsfGenerator = new DSFGenerator();
-
-  async generateDSF(req: AuthRequest, res: Response, next: NextFunction) {
+  private dsfValidationService = new DSFValidationService();
+  generateDSF = async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
       const { folderId } = req.body;
 
@@ -87,7 +86,21 @@ class DSFController {
       const folder = await prisma.folder.findUnique({
         where: { id: folderId },
         include: {
-          client: true,
+          client: {
+            select: {
+              id: true,
+              name: true,
+              legalForm: true,
+              clientType: true,
+              taxNumber: true,
+              address: true,
+              city: true,
+              phone: true,
+              country: true,
+              currency: true,
+              createdBy: true,
+            },
+          },
           balances: {
             where: { status: BalanceStatus.PROCESSED },
             include: {
@@ -135,33 +148,25 @@ class DSFController {
 
       if (dsf) {
         // Regenerate
-        const dsfData = await this.dsfGenerator.generate(folderWithRelations);
+        const reports = await this.dsfGenerator.generate(folderWithRelations);
 
         dsf = await prisma.dSF.update({
           where: { id: dsf.id },
           data: {
             status: DSFStatus.GENERATED,
-            balanceSheet: dsfData.balanceSheet,
-            incomeStatement: dsfData.incomeStatement,
-            taxTables: dsfData.taxTables,
-            notes: dsfData.notes,
-            signaletics: dsfData.signaletics,
+            reports: reports as any,
             lastGeneratedAt: new Date(),
           },
         });
       } else {
         // Create new DSF
-        const dsfData = await this.dsfGenerator.generate(folderWithRelations);
+        const reports = await this.dsfGenerator.generate(folderWithRelations);
 
         dsf = await prisma.dSF.create({
           data: {
             folderId,
             status: DSFStatus.GENERATED,
-            balanceSheet: dsfData.balanceSheet,
-            incomeStatement: dsfData.incomeStatement,
-            taxTables: dsfData.taxTables,
-            notes: dsfData.notes,
-            signaletics: dsfData.signaletics,
+            reports: reports as any,
             lastGeneratedAt: new Date(),
           },
         });
@@ -184,9 +189,8 @@ class DSFController {
     } catch (error) {
       next(error);
     }
-  }
-
-  async getDSF(req: AuthRequest, res: Response, next: NextFunction) {
+  };
+  getDSF = async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
       const { folderId } = req.params;
 
@@ -216,9 +220,8 @@ class DSFController {
     } catch (error) {
       next(error);
     }
-  }
-
-  async validateDSF(req: AuthRequest, res: Response, next: NextFunction) {
+  };
+  validateDSF = async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
       const { id } = req.params;
 
@@ -295,9 +298,8 @@ class DSFController {
     } catch (error) {
       next(error);
     }
-  }
-
-  async exportDSF(req: AuthRequest, res: Response, next: NextFunction) {
+  };
+  exportDSF = async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
       const { id } = req.params;
       const { format } = req.query;
@@ -349,13 +351,11 @@ class DSFController {
     } catch (error) {
       next(error);
     }
-  }
-
-  async updateDSF(req: AuthRequest, res: Response, next: NextFunction) {
+  };
+  updateDSF = async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
       const { id } = req.params;
-      const { notes, signaletics, balanceSheet, incomeStatement, taxTables } =
-        req.body;
+      const { reports } = req.body;
 
       const dsf = await prisma.dSF.findUnique({
         where: { id },
@@ -376,218 +376,56 @@ class DSFController {
         );
       }
 
-      const results: any = {};
+      // Update reports array
+      if (reports && Array.isArray(reports)) {
+        // Merge with existing reports or replace completely
+        const currentReports = (dsf.reports as any[]) || [];
+        const updatedReports = [...currentReports];
 
-      // Update Notes
-      if (notes && typeof notes === "object") {
-        for (const [noteKey, noteData] of Object.entries(notes)) {
-          const noteType = noteKey.toUpperCase() as any; // NOTE1, NOTE2, etc.
+        // Update or add reports based on type
+        reports.forEach((newReport: any) => {
+          const existingIndex = updatedReports.findIndex(
+            (r) => r.type === newReport.type
+          );
 
-          if (noteData && typeof noteData === "object") {
-            const existingNote = await prisma.dSFNotes.findFirst({
-              where: {
-                dsfId: id,
-                noteType: noteType,
-                isActive: true,
-              },
-              orderBy: { version: "desc" },
-            });
-
-            const newVersion = existingNote ? existingNote.version + 1 : 1;
-
-            // Deactivate previous version
-            if (existingNote) {
-              await prisma.dSFNotes.update({
-                where: { id: existingNote.id },
-                data: { isActive: false },
-              });
-            }
-
-            // Create new version
-            const newNote = await prisma.dSFNotes.create({
+          if (existingIndex !== -1) {
+            // Update existing report
+            updatedReports[existingIndex] = {
+              ...updatedReports[existingIndex],
               data: {
-                dsfId: id,
-                noteType: noteType,
-                version: newVersion,
-                headerInfo: (noteData as any).headerInfo,
-                debts: (noteData as any).debts,
-                commitments: (noteData as any).commitments,
-                comment: (noteData as any).comment,
-                createdBy: userId,
-                updatedBy: userId,
+                ...updatedReports[existingIndex].data,
+                ...newReport.data,
               },
-            });
-
-            results.notes = results.notes || {};
-            results.notes[noteKey] = newNote;
+            };
+          } else {
+            // Add new report
+            updatedReports.push(newReport);
           }
-        }
-      }
-
-      // Update Signaletics (Fiches)
-      if (signaletics && typeof signaletics === "object") {
-        for (const [ficheKey, ficheData] of Object.entries(signaletics)) {
-          const ficheType = ficheKey.toUpperCase() as any; // R1, R2, etc.
-
-          const existingFiche = await prisma.dSFSignaletics.findFirst({
-            where: {
-              dsfId: id,
-              ficheType: ficheType,
-              isActive: true,
-            },
-            orderBy: { version: "desc" },
-          });
-
-          const newVersion = existingFiche ? existingFiche.version + 1 : 1;
-
-          // Deactivate previous version
-          if (existingFiche) {
-            await prisma.dSFSignaletics.update({
-              where: { id: existingFiche.id },
-              data: { isActive: false },
-            });
-          }
-
-          // Create new version
-          const newFiche = await prisma.dSFSignaletics.create({
-            data: {
-              dsfId: id,
-              ficheType: ficheType,
-              version: newVersion,
-              data: ficheData as any,
-              createdBy: userId,
-              updatedBy: userId,
-            },
-          });
-
-          results.signaletics = results.signaletics || {};
-          results.signaletics[ficheKey] = newFiche;
-        }
-      }
-
-      // Update Balance Sheet
-      if (balanceSheet) {
-        const existingBS = await prisma.dSFBalanceSheet.findFirst({
-          where: { dsfId: id, isActive: true },
-          orderBy: { version: "desc" },
         });
 
-        const newVersion = existingBS ? existingBS.version + 1 : 1;
-
-        if (existingBS) {
-          await prisma.dSFBalanceSheet.update({
-            where: { id: existingBS.id },
-            data: { isActive: false },
-          });
-        }
-
-        const newBS = await prisma.dSFBalanceSheet.create({
+        await prisma.dSF.update({
+          where: { id },
           data: {
-            dsfId: id,
-            version: newVersion,
-            assets: balanceSheet.assets,
-            liabilities: balanceSheet.liabilities,
-            createdBy: userId,
-            updatedBy: userId,
+            reports: updatedReports as any,
+            lastGeneratedAt: new Date(),
+            userId: dsf.userId || userId, // Set userId if not already set
           },
         });
-
-        results.balanceSheet = newBS;
       }
-
-      // Update Income Statement
-      if (incomeStatement) {
-        const existingIS = await prisma.dSFIncomeStatement.findFirst({
-          where: { dsfId: id, isActive: true },
-          orderBy: { version: "desc" },
-        });
-
-        const newVersion = existingIS ? existingIS.version + 1 : 1;
-
-        if (existingIS) {
-          await prisma.dSFIncomeStatement.update({
-            where: { id: existingIS.id },
-            data: { isActive: false },
-          });
-        }
-
-        const newIS = await prisma.dSFIncomeStatement.create({
-          data: {
-            dsfId: id,
-            version: newVersion,
-            revenues: incomeStatement.revenues,
-            expenses: incomeStatement.expenses,
-            result: incomeStatement.result,
-            createdBy: userId,
-            updatedBy: userId,
-          },
-        });
-
-        results.incomeStatement = newIS;
-      }
-
-      // Update Tax Tables
-      if (taxTables && typeof taxTables === "object") {
-        for (const [tableKey, tableData] of Object.entries(taxTables)) {
-          const tableType = tableKey.toUpperCase() as any;
-
-          const existingTable = await prisma.dSFTaxTable.findFirst({
-            where: {
-              dsfId: id,
-              tableType: tableType,
-              isActive: true,
-            },
-            orderBy: { version: "desc" },
-          });
-
-          const newVersion = existingTable ? existingTable.version + 1 : 1;
-
-          if (existingTable) {
-            await prisma.dSFTaxTable.update({
-              where: { id: existingTable.id },
-              data: { isActive: false },
-            });
-          }
-
-          const newTable = await prisma.dSFTaxTable.create({
-            data: {
-              dsfId: id,
-              tableType: tableType,
-              version: newVersion,
-              data: tableData as any,
-              createdBy: userId,
-              updatedBy: userId,
-            },
-          });
-
-          results.taxTables = results.taxTables || {};
-          results.taxTables[tableKey] = newTable;
-        }
-      }
-
-      // Update DSF lastGeneratedAt and userId if not set
-      await prisma.dSF.update({
-        where: { id },
-        data: {
-          lastGeneratedAt: new Date(),
-          userId: dsf.userId || userId, // Set userId if not already set
-        },
-      });
 
       res.json({
         message: "DSF updated successfully",
-        results,
       });
     } catch (error) {
       next(error);
     }
-  }
+  };
 
-  async getCoherenceReport(
+  getCoherenceReport = async (
     req: AuthRequest,
     res: Response,
     next: NextFunction
-  ) {
+  ) => {
     try {
       const { id } = req.params;
 
@@ -616,9 +454,9 @@ class DSFController {
     } catch (error) {
       next(error);
     }
-  }
+  };
 
-  async importDSF(req: AuthRequest, res: Response, next: NextFunction) {
+  importDSF = async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
       const { folderId } = req.body;
       const file = req.files && "file" in req.files ? req.files.file[0] : null;
@@ -647,20 +485,123 @@ class DSFController {
         );
       }
 
-      // Parse Excel file
-      const XLSX = require("xlsx");
-      const workbook = XLSX.readFile(file.path);
-      const sheetNames = workbook.SheetNames;
-
-      // Extract data from different sheets
-      const balanceSheet = this.extractSheetData(workbook, "Bilan");
-      const incomeStatement = this.extractSheetData(
-        workbook,
-        "Compte de Résultat"
+      // Validate DSF file
+      const validationResult = await this.dsfValidationService.validateDSFFile(
+        file.path
       );
-      const taxTables = this.extractSheetData(workbook, "Tableaux Fiscaux");
-      const notes = this.extractNotesData(workbook);
-      const signaletics = this.extractSignaleticsData(workbook);
+      if (!validationResult.isValid) {
+        // Clean up uploaded file
+        await fs.unlink(file.path).catch(() => {}); // Ignore cleanup errors
+        throw new BadRequestError(
+          `DSF validation failed: ${validationResult.errors.join(", ")}`
+        );
+      }
+
+      // Parse Excel file
+      const workbook = XLSX.readFile(file.path);
+
+      // Extract data using validation service
+      const extractedData = this.dsfValidationService.extractDSFData(workbook);
+      const { taxTables, notes, signaletics } = extractedData;
+
+      // Validate extracted data structure
+      if (!notes && !signaletics) {
+        throw new BadRequestError(
+          "DSF file must contain at least notes or signaletics data"
+        );
+      }
+
+      // Sanitize data for database storage
+      const sanitizeForDB = (data: any) => {
+        if (data === null || data === undefined) return null;
+        if (typeof data === "object" && !Array.isArray(data)) {
+          const sanitized: any = {};
+          for (const [key, value] of Object.entries(data)) {
+            if (value !== null && value !== undefined) {
+              sanitized[key] = sanitizeForDB(value);
+            }
+          }
+          return Object.keys(sanitized).length > 0 ? sanitized : null;
+        }
+        if (Array.isArray(data)) {
+          return data.filter((item) => item !== null && item !== undefined);
+        }
+        return data;
+      };
+
+      // Valid DSF field names
+      const validFields = [
+        "note1",
+        "note2",
+        "note3a",
+        "note3b",
+        "note4",
+        "note5",
+        "note6",
+        "note7",
+        "note8",
+        "note9",
+        "note10",
+        "note11",
+        "note12",
+        "note13",
+        "note14",
+        "note15",
+        "note16",
+        "note17",
+        "note18",
+        "note19",
+        "note20",
+        "note21",
+        "note22",
+        "note23",
+        "note24",
+        "note25",
+        "note26",
+        "note27",
+        "note28",
+        "note29",
+        "note30",
+        "note31",
+        "note32",
+        "note33",
+        "fiche1",
+        "fiche2",
+        "fiche3",
+        "cter",
+        "cf1",
+      ];
+
+      // Map notes data to individual DSF fields
+      const mappedData: any = {};
+
+      if (notes) {
+        // notes is an object with keys like 'note1', 'note2', 'fiche1', etc.
+        Object.entries(notes).forEach(([key, value]) => {
+          if (
+            validFields.includes(key) &&
+            value !== null &&
+            value !== undefined
+          ) {
+            mappedData[key] = sanitizeForDB(value);
+          }
+        });
+      }
+
+      if (signaletics) {
+        // signaletics contains fiche data
+        Object.entries(signaletics).forEach(([key, value]) => {
+          if (
+            validFields.includes(key) &&
+            value !== null &&
+            value !== undefined
+          ) {
+            mappedData[key] = sanitizeForDB(value);
+          }
+        });
+      }
+
+      const sanitizedData = mappedData;
 
       // Check if DSF already exists
       let dsf = await prisma.dSF.findUnique({
@@ -673,11 +614,7 @@ class DSFController {
           where: { id: dsf.id },
           data: {
             status: DSFStatus.GENERATED,
-            balanceSheet,
-            incomeStatement,
-            taxTables,
-            notes,
-            signaletics,
+            ...sanitizedData,
             lastGeneratedAt: new Date(),
           },
         });
@@ -687,11 +624,7 @@ class DSFController {
           data: {
             folderId,
             status: DSFStatus.GENERATED,
-            balanceSheet,
-            incomeStatement,
-            taxTables,
-            notes,
-            signaletics,
+            ...sanitizedData,
             lastGeneratedAt: new Date(),
           },
         });
@@ -711,47 +644,12 @@ class DSFController {
           lastGeneratedAt: dsf.lastGeneratedAt,
         },
       });
+
+      await fs.unlink(file.path).catch(() => {});
     } catch (error) {
       next(error);
     }
-  }
-
-  private extractSheetData(workbook: any, sheetName: string): any {
-    const sheet = workbook.Sheets[sheetName];
-    if (!sheet) return {};
-
-    return XLSX.utils.sheet_to_json(sheet, { header: 1 });
-  }
-
-  private extractNotesData(workbook: any): any {
-    const notes: any = {};
-
-    // Extract notes from sheets starting with 'Note'
-    workbook.SheetNames.forEach((sheetName: string) => {
-      if (sheetName.startsWith("Note")) {
-        notes[sheetName.toLowerCase()] = this.extractSheetData(
-          workbook,
-          sheetName
-        );
-      }
-    });
-
-    return notes;
-  }
-
-  private extractSignaleticsData(workbook: any): any {
-    const signaletics: any = {};
-
-    // Extract signaletics sheets (r1, r2, r3, r4, r4Bis)
-    ["r1", "r2", "r3", "r4", "r4Bis"].forEach((fiche) => {
-      const sheet = workbook.Sheets[fiche];
-      if (sheet) {
-        signaletics[fiche] = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-      }
-    });
-
-    return signaletics;
-  }
+  };
 }
 
 export const dsfController = new DSFController();

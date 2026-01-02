@@ -95,7 +95,11 @@ export class DSFConfigController {
       ).DSFComptableConfig.findMany({
         where: whereClause,
         include: {
-          config: true, // Pour récupérer la catégorie
+          config: {
+            include: {
+              accountMappings: true, // Include account mappings
+            },
+          },
         },
         orderBy: [{ ownerType: "asc" }, { codeDsf: "asc" }],
       });
@@ -180,8 +184,7 @@ export class DSFConfigController {
         category,
         codeDsf,
         libelle,
-        operations = [],
-        destinationCell = "",
+        accountMappings = [], // New structure: array of {accountNumber, source, destination}
         clientId = null,
         exerciseId = null,
         ownerType = "SYSTEM",
@@ -194,8 +197,7 @@ export class DSFConfigController {
         category,
         codeDsf,
         libelle,
-        operations,
-        destinationCell,
+        accountMappings,
         clientId,
         exerciseId,
         ownerType,
@@ -252,25 +254,33 @@ export class DSFConfigController {
       const finalClientId = finalOwnerType === "SYSTEM" ? null : clientId;
       const finalExerciseId = finalOwnerType === "SYSTEM" ? null : exerciseId;
 
-      // Traitement des opérations
-      let finalOperations: string[] = [];
+      // Validation des account mappings
+      let finalAccountMappings: Array<{
+        accountNumber: string;
+        source: string;
+        destination: string;
+      }> = [];
       try {
-        if (Array.isArray(operations)) {
-          finalOperations = operations
-            .map((op: any) => String(op).trim())
-            .filter((op: string) => op.length > 0);
-        } else if (typeof operations === "string") {
-          finalOperations = operations
-            .split(",")
-            .map((op: string) => op.trim())
-            .filter((op: string) => op.length > 0);
+        if (Array.isArray(accountMappings)) {
+          finalAccountMappings = accountMappings
+            .map((mapping: any) => ({
+              accountNumber: String(mapping.accountNumber).trim(),
+              source: String(mapping.source).trim(),
+              destination: String(mapping.destination).trim(),
+            }))
+            .filter(
+              (mapping) =>
+                mapping.accountNumber.length > 0 &&
+                mapping.source.length > 0 &&
+                mapping.destination.length > 0
+            );
         }
-      } catch (opError) {
-        console.error("❌ Error processing operations:", opError);
-        finalOperations = [];
+      } catch (mappingError) {
+        console.error("❌ Error processing account mappings:", mappingError);
+        finalAccountMappings = [];
       }
 
-      console.log("✅ Operations processed:", finalOperations);
+      console.log("✅ Account mappings processed:", finalAccountMappings);
 
       // Chercher ou créer la DSFConfig de base
       console.log("🔍 Looking for base config with category:", cleanedCategory);
@@ -345,10 +355,6 @@ export class DSFConfigController {
         ownerType: finalOwnerType,
         codeDsf: cleanedCodeDsf,
         libelle: cleanedLibelle,
-        operations: finalOperations,
-        destinationCell: destinationCell
-          ? String(destinationCell).trim()
-          : null,
         scope,
         isActive,
         isLocked: finalOwnerType === "SYSTEM" ? true : isLocked,
@@ -379,6 +385,23 @@ export class DSFConfigController {
         comptableConfig.id
       );
 
+      // Create account mappings
+      if (finalAccountMappings.length > 0) {
+        const mappingPromises = finalAccountMappings.map((mapping) =>
+          (prisma as any).DSFAccountMapping.create({
+            data: {
+              configId: baseConfig.id,
+              accountNumber: mapping.accountNumber,
+              source: mapping.source,
+              destination: mapping.destination,
+              createdBy: userId,
+              updatedBy: userId,
+            },
+          })
+        );
+        await Promise.all(mappingPromises);
+      }
+
       // Log audit event
       await auditService.logDSFConfigCreated(
         userId,
@@ -386,8 +409,7 @@ export class DSFConfigController {
           category: baseConfig.category,
           codeDsf: cleanedCodeDsf,
           libelle: cleanedLibelle,
-          operations: finalOperations,
-          destinationCell,
+          accountMappings: finalAccountMappings,
           scope,
           ownerType: finalOwnerType,
           clientId: finalClientId,
@@ -512,6 +534,34 @@ export class DSFConfigController {
             .split(",")
             .map((op: string) => op.trim())
             .filter((op: string) => op.length > 0);
+        }
+      }
+
+      // Handle accountMappings updates
+      if (updates.accountMappings !== undefined) {
+        if (Array.isArray(updates.accountMappings)) {
+          // Delete existing mappings
+          await (prisma as any).DSFAccountMapping.deleteMany({
+            where: { configId: existingConfig.configId },
+          });
+
+          // Create new mappings
+          if (updates.accountMappings.length > 0) {
+            const mappingPromises = updates.accountMappings.map(
+              (mapping: any) =>
+                (prisma as any).DSFAccountMapping.create({
+                  data: {
+                    configId: existingConfig.configId,
+                    accountNumber: String(mapping.accountNumber).trim(),
+                    source: String(mapping.source).trim(),
+                    destination: String(mapping.destination).trim(),
+                    createdBy: userId,
+                    updatedBy: userId,
+                  },
+                })
+            );
+            await Promise.all(mappingPromises);
+          }
         }
       }
 

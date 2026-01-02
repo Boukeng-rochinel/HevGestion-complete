@@ -107,7 +107,7 @@ export class DGIService {
       // Decrypt API password
       const apiPassword = await this.decryptPassword(declaration.apiPassword!);
 
-      // Authenticate with DGI
+      // Authenticate with DGI using username (niuNumber) and password
       const authToken = await this.authenticateWithDGI(
         declaration.niuNumber!,
         apiPassword
@@ -304,8 +304,8 @@ export class DGIService {
     password: string
   ): Promise<string> {
     try {
-      const response = await this.client.post("/api/v1/auth/login", {
-        niu: niuNumber,
+      const response = await this.client.post("/api/v1/auth", {
+        username: niuNumber,
         password,
       });
 
@@ -323,7 +323,7 @@ export class DGIService {
     return {
       // Company information
       entreprise: {
-        niu: declaration.niuNumber,
+        niu: company.taxNumber || declaration.niuNumber, // Use company tax number as NIU
         raisonSociale: company.name,
         formeJuridique: company.legalForm,
         numeroContribuable: company.taxNumber,
@@ -356,6 +356,232 @@ export class DGIService {
       (end.getFullYear() - start.getFullYear()) * 12 +
       (end.getMonth() - start.getMonth())
     );
+  }
+
+  async submitNote1(
+    declarationId: string,
+    note1Data: any,
+    authToken: string
+  ): Promise<{ success: boolean; message: string }> {
+    try {
+      const response = await this.client.put(
+        `/api/v1/process/${declarationId}/note1`,
+        note1Data,
+        {
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+          },
+        }
+      );
+
+      return {
+        success: true,
+        message: response.data.action || "Note1 submitted successfully",
+      };
+    } catch (error: any) {
+      console.error("DGI Note1 submission error:", error);
+
+      return {
+        success: false,
+        message: error.response?.data?.message || "Note1 submission failed",
+      };
+    }
+  }
+
+  async updateNote1(
+    declarationId: string,
+    note1Data: any,
+    authToken: string
+  ): Promise<{ success: boolean; message: string }> {
+    try {
+      const response = await this.client.patch(
+        `/api/v1/process/${declarationId}/note1`,
+        note1Data,
+        {
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+          },
+        }
+      );
+
+      return {
+        success: true,
+        message: response.data.action || "Note1 updated successfully",
+      };
+    } catch (error: any) {
+      console.error("DGI Note1 update error:", error);
+
+      return {
+        success: false,
+        message: error.response?.data?.message || "Note1 update failed",
+      };
+    }
+  }
+
+  async deleteNote1(
+    declarationId: string,
+    authToken: string
+  ): Promise<{ success: boolean; message: string }> {
+    try {
+      const response = await this.client.delete(
+        `/api/v1/process/${declarationId}/note1`,
+        {
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+          },
+        }
+      );
+
+      return {
+        success: true,
+        message: response.data.action || "Note1 deleted successfully",
+      };
+    } catch (error: any) {
+      console.error("DGI Note1 delete error:", error);
+
+      return {
+        success: false,
+        message: error.response?.data?.message || "Note1 delete failed",
+      };
+    }
+  }
+
+  async submitEtatsFinanciers(
+    declarationId: string,
+    etatsFinanciersData: any,
+    authToken: string
+  ): Promise<{ success: boolean; message: string; action?: string }> {
+    try {
+      const response = await this.client.put(
+        `/api/v1/process/${declarationId}/etatsFinanciers`,
+        etatsFinanciersData,
+        {
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+          },
+        }
+      );
+
+      return {
+        success: true,
+        message:
+          response.data.status || "Etats financiers submitted successfully",
+        action: response.data.action,
+      };
+    } catch (error: any) {
+      console.error("DGI Etats Financiers submission error:", error);
+
+      return {
+        success: false,
+        message:
+          error.response?.data?.message || "Etats financiers submission failed",
+        action: error.response?.data?.action,
+      };
+    }
+  }
+
+  async updateEtatsFinanciers(
+    declarationId: string,
+    etatsFinanciersData: any,
+    authToken: string
+  ): Promise<{ success: boolean; message: string; action?: string }> {
+    try {
+      const response = await this.client.patch(
+        `/api/v1/process/${declarationId}/etatsFinanciers`,
+        etatsFinanciersData,
+        {
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+          },
+        }
+      );
+
+      return {
+        success: true,
+        message:
+          response.data.status || "Etats financiers updated successfully",
+        action: response.data.action,
+      };
+    } catch (error: any) {
+      console.error("DGI Etats Financiers update error:", error);
+
+      return {
+        success: false,
+        message:
+          error.response?.data?.message || "Etats financiers update failed",
+        action: error.response?.data?.action,
+      };
+    }
+  }
+
+  async deleteEtatsFinanciers(
+    declarationId: string,
+    authToken: string
+  ): Promise<{ success: boolean; message: string; action?: string }> {
+    try {
+      const response = await this.client.delete(
+        `/api/v1/process/${declarationId}/etatsFinanciers`,
+        {
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+          },
+        }
+      );
+
+      return {
+        success: true,
+        message:
+          response.data.status || "Etats financiers deleted successfully",
+        action: response.data.action,
+      };
+    } catch (error: any) {
+      console.error("DGI Etats Financiers delete error:", error);
+
+      return {
+        success: false,
+        message:
+          error.response?.data?.message || "Etats financiers delete failed",
+        action: error.response?.data?.action,
+      };
+    }
+  }
+
+  prepareEtatsFinanciersData(declaration: DeclarationWithRelations): any {
+    const dsf = declaration.folder.dsf;
+    const company = declaration.folder.client;
+
+    return {
+      republique: "REPUBLIQUE DU CAMEROUN",
+      ministere: "MINISTERE DES FINANCES",
+      direction: "DIRECTION GENERALE DES IMPOTS",
+      centreDeDepot: "CENTRE DES IMPOTS",
+      exerClosLe: declaration.folder.endDate.toISOString().split("T")[0],
+      denomSoc: company.name,
+      siglUsuel: company.name.substring(0, 10).toUpperCase(),
+      addrComp: company.address || "",
+      numIdentFiscal: company.taxNumber || declaration.niuNumber,
+      ficDide: true,
+      bilan: true,
+      comptRes: true,
+      tabDesFluxTreso: false,
+      notAnnex: true,
+      nombreDePages: "10",
+      nombreDexamplaire: "1",
+      dateDepot: new Date().toISOString().split("T")[0],
+      nomDeAgent: "AGENT COMPTABLE",
+      signDeLagent: "SIGNATURE",
+      // Add DSF data
+      dsfData: dsf
+        ? {
+            balanceSheet: dsf.balanceSheet,
+            incomeStatement: dsf.incomeStatement,
+            taxTables: dsf.taxTables,
+            notes: dsf.notes,
+            signaletics: dsf.signaletics,
+            reports: (dsf as any).reports,
+          }
+        : null,
+    };
   }
 
   // Mock method for testing when DGI API is not available

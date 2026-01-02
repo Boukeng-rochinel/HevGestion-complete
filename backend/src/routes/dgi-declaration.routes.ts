@@ -27,6 +27,10 @@ router.post(
   "/declaration",
   dgiDeclarationController.submitDeclaration.bind(dgiDeclarationController)
 );
+router.post(
+  "/dsf-declaration",
+  dgiDeclarationController.submitDSFDeclaration.bind(dgiDeclarationController)
+);
 router.get(
   "/declarations/:userId",
   dgiDeclarationController.getDeclarationHistory.bind(dgiDeclarationController)
@@ -34,6 +38,20 @@ router.get(
 router.get(
   "/declaration/:declarationId",
   dgiDeclarationController.getDeclarationStatus.bind(dgiDeclarationController)
+);
+
+// Note1 routes
+router.put(
+  "/note1",
+  dgiDeclarationController.submitNote1.bind(dgiDeclarationController)
+);
+router.patch(
+  "/note1",
+  dgiDeclarationController.updateNote1.bind(dgiDeclarationController)
+);
+router.delete(
+  "/note1/:declarationId",
+  dgiDeclarationController.deleteNote1.bind(dgiDeclarationController)
 );
 
 // Validation routes

@@ -27,7 +27,7 @@ export class DGIDeclarationController {
         });
       }
 
-      const config = await prisma.dgiConfig.findUnique({
+      const config = await prisma.dGIConfig.findUnique({
         where: { userId },
       });
 
@@ -72,14 +72,14 @@ export class DGIDeclarationController {
         });
       }
 
-      const existingConfig = await prisma.dgiConfig.findUnique({
+      const existingConfig = await prisma.dGIConfig.findUnique({
         where: { userId: configData.userId },
       });
 
       let config;
       if (existingConfig) {
         // Update existing config
-        config = await prisma.dgiConfig.update({
+        config = await prisma.dGIConfig.update({
           where: { id: existingConfig.id },
           data: {
             companyName: configData.companyName,
@@ -90,7 +90,7 @@ export class DGIDeclarationController {
         });
       } else {
         // Create new config
-        config = await prisma.dgiConfig.create({
+        config = await prisma.dGIConfig.create({
           data: {
             companyName: configData.companyName,
             niu: configData.niu,
@@ -129,7 +129,7 @@ export class DGIDeclarationController {
       const userIdFromToken = req.user?.userId;
 
       // Verify ownership
-      const existingConfig = await prisma.dgiConfig.findUnique({
+      const existingConfig = await prisma.dGIConfig.findUnique({
         where: { id },
       });
 
@@ -140,7 +140,7 @@ export class DGIDeclarationController {
         });
       }
 
-      const config = await prisma.dgiConfig.update({
+      const config = await prisma.dGIConfig.update({
         where: { id },
         data: updates,
       });
@@ -179,10 +179,23 @@ export class DGIDeclarationController {
         });
       }
 
+      // Get DGI configuration for the user
+      const dgiConfig = await prisma.dGIConfig.findUnique({
+        where: { userId },
+      });
+
+      if (!dgiConfig) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Configuration DGI non trouvée. Veuillez configurer vos identifiants DGI.",
+        });
+      }
+
       // Verify folder ownership
       const folder = await prisma.folder.findUnique({
         where: { id: folderId },
-        include: { client: true },
+        include: { client: true, dsf: true },
       });
 
       if (!folder || folder.ownerId !== userId) {
@@ -192,10 +205,18 @@ export class DGIDeclarationController {
         });
       }
 
+      if (!folder.dsf) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Aucun DSF trouvé pour ce dossier. Veuillez générer le DSF d'abord.",
+        });
+      }
+
       // Generate declaration number
       const declarationNumber = `DSF${folder.fiscalYear}-${Date.now().toString().slice(-8)}`;
 
-      // Create declaration record
+      // Create declaration record with DGI credentials
       const declaration = await prisma.taxDeclaration.create({
         data: {
           folderId,
@@ -204,6 +225,45 @@ export class DGIDeclarationController {
           dueDate: new Date(), // Will be updated based on fiscal requirements
           status: "DECLARED",
           dsfId: declarationNumber,
+          niuNumber: dgiConfig.username, // Use username for DGI authentication
+          apiPassword: dgiConfig.password, // Note: Should be encrypted
+        },
+        include: {
+          folder: {
+            include: {
+              client: true,
+              dsf: true,
+            },
+          },
+        },
+      });
+
+      // Submit to DGI
+      const { DGIService } = await import("../services/dgi.service");
+      const dgiService = new DGIService();
+
+      const result = await dgiService.submitDeclaration(declaration as any);
+
+      if (!result.success) {
+        // Update declaration status to failed
+        await prisma.taxDeclaration.update({
+          where: { id: declaration.id },
+          data: { status: "PENDING" },
+        });
+
+        return res.status(400).json({
+          success: false,
+          message: result.message,
+          errors: result.errors,
+        });
+      }
+
+      // Update declaration with DGI response
+      await prisma.taxDeclaration.update({
+        where: { id: declaration.id },
+        data: {
+          amountDue: result.amountDue,
+          filedAt: new Date(),
         },
       });
 
@@ -212,9 +272,11 @@ export class DGIDeclarationController {
         data: {
           declarationId: declaration.id,
           declarationNumber,
+          dsfId: result.dsfId,
           submittedAt: declaration.createdAt.toISOString(),
           status: declaration.status,
           fiscalYear: folder.fiscalYear,
+          amountDue: result.amountDue,
         },
       });
     } catch (error) {
@@ -328,6 +390,371 @@ export class DGIDeclarationController {
       res.status(500).json({
         success: false,
         message: "Erreur lors de la récupération du statut",
+      });
+    }
+  }
+
+  // Submit Note1 data to DGI
+  async submitNote1(req: AuthRequest, res: Response) {
+    try {
+      const { declarationId, note1Data } = req.body;
+      const userIdFromToken = req.user?.userId;
+
+      // Verify declaration ownership
+      const declaration = await prisma.taxDeclaration.findUnique({
+        where: { id: declarationId },
+        include: {
+          folder: {
+            select: {
+              ownerId: true,
+              client: {
+                select: { name: true },
+              },
+            },
+          },
+        },
+      });
+
+      if (!declaration || declaration.folder.ownerId !== userIdFromToken) {
+        return res.status(403).json({
+          success: false,
+          message: "Déclaration non trouvée ou accès non autorisé",
+        });
+      }
+
+      // Get DGI configuration for authentication
+      const dgiConfig = await prisma.dGIConfig.findUnique({
+        where: { userId: userIdFromToken },
+      });
+
+      if (!dgiConfig) {
+        return res.status(400).json({
+          success: false,
+          message: "Configuration DGI non trouvée",
+        });
+      }
+
+      // Authenticate with DGI
+      const { DGIService } = await import("../services/dgi.service");
+      const dgiService = new DGIService();
+      const authToken = await dgiService.authenticateWithDGI(
+        dgiConfig.username,
+        dgiConfig.password
+      );
+
+      // Submit Note1 data
+      const result = await dgiService.submitNote1(
+        declaration.dsfId!,
+        note1Data,
+        authToken
+      );
+
+      if (!result.success) {
+        return res.status(400).json({
+          success: false,
+          message: result.message,
+        });
+      }
+
+      res.json({
+        success: true,
+        message: result.message,
+      });
+    } catch (error) {
+      console.error("Error submitting Note1:", error);
+      res.status(500).json({
+        success: false,
+        message: "Erreur lors de la soumission de Note1",
+      });
+    }
+  }
+
+  // Update Note1 data
+  async updateNote1(req: AuthRequest, res: Response) {
+    try {
+      const { declarationId, note1Data } = req.body;
+      const userIdFromToken = req.user?.userId;
+
+      // Verify declaration ownership
+      const declaration = await prisma.taxDeclaration.findUnique({
+        where: { id: declarationId },
+        include: {
+          folder: {
+            select: { ownerId: true },
+          },
+        },
+      });
+
+      if (!declaration || declaration.folder.ownerId !== userIdFromToken) {
+        return res.status(403).json({
+          success: false,
+          message: "Déclaration non trouvée ou accès non autorisé",
+        });
+      }
+
+      // Get DGI configuration for authentication
+      const dgiConfig = await prisma.dGIConfig.findUnique({
+        where: { userId: userIdFromToken },
+      });
+
+      if (!dgiConfig) {
+        return res.status(400).json({
+          success: false,
+          message: "Configuration DGI non trouvée",
+        });
+      }
+
+      // Authenticate with DGI
+      const { DGIService } = await import("../services/dgi.service");
+      const dgiService = new DGIService();
+      const authToken = await dgiService.authenticateWithDGI(
+        dgiConfig.username,
+        dgiConfig.password
+      );
+
+      // Update Note1 data
+      const result = await dgiService.updateNote1(
+        declaration.dsfId!,
+        note1Data,
+        authToken
+      );
+
+      if (!result.success) {
+        return res.status(400).json({
+          success: false,
+          message: result.message,
+        });
+      }
+
+      res.json({
+        success: true,
+        message: result.message,
+      });
+    } catch (error) {
+      console.error("Error updating Note1:", error);
+      res.status(500).json({
+        success: false,
+        message: "Erreur lors de la mise à jour de Note1",
+      });
+    }
+  }
+
+  // Delete Note1 data
+  async deleteNote1(req: AuthRequest, res: Response) {
+    try {
+      const { declarationId } = req.params;
+      const userIdFromToken = req.user?.userId;
+
+      // Verify declaration ownership
+      const declaration = await prisma.taxDeclaration.findUnique({
+        where: { id: declarationId },
+        include: {
+          folder: {
+            select: { ownerId: true },
+          },
+        },
+      });
+
+      if (!declaration || declaration.folder.ownerId !== userIdFromToken) {
+        return res.status(403).json({
+          success: false,
+          message: "Déclaration non trouvée ou accès non autorisé",
+        });
+      }
+
+      // Get DGI configuration for authentication
+      const dgiConfig = await prisma.dGIConfig.findUnique({
+        where: { userId: userIdFromToken },
+      });
+
+      if (!dgiConfig) {
+        return res.status(400).json({
+          success: false,
+          message: "Configuration DGI non trouvée",
+        });
+      }
+
+      // Authenticate with DGI
+      const { DGIService } = await import("../services/dgi.service");
+      const dgiService = new DGIService();
+      const authToken = await dgiService.authenticateWithDGI(
+        dgiConfig.username,
+        dgiConfig.password
+      );
+
+      // Delete Note1 data
+      const result = await dgiService.deleteNote1(
+        declaration.dsfId!,
+        authToken
+      );
+
+      if (!result.success) {
+        return res.status(400).json({
+          success: false,
+          message: result.message,
+        });
+      }
+
+      res.json({
+        success: true,
+        message: result.message,
+      });
+    } catch (error) {
+      console.error("Error deleting Note1:", error);
+      res.status(500).json({
+        success: false,
+        message: "Erreur lors de la suppression de Note1",
+      });
+    }
+  }
+
+  // Submit DSF declaration using etatsFinanciers API
+  async submitDSFDeclaration(req: AuthRequest, res: Response) {
+    try {
+      const { folderId, declarationType, declarationYear } = req.body;
+      const userIdFromToken = req.user?.userId;
+
+      // Get DGI configuration for the user
+      const dgiConfig = await prisma.dGIConfig.findUnique({
+        where: { userId: userIdFromToken },
+      });
+
+      if (!dgiConfig) {
+        return res.status(400).json({
+          success: false,
+          message: "Configuration DGI non trouvée. Veuillez configurer vos identifiants DGI.",
+        });
+      }
+
+      // Verify folder ownership
+      const folder = await prisma.folder.findUnique({
+        where: { id: folderId },
+        include: { client: true, dsf: true },
+      });
+
+      if (!folder || folder.ownerId !== userIdFromToken) {
+        return res.status(403).json({
+          success: false,
+          message: "Dossier non trouvé ou accès non autorisé",
+        });
+      }
+
+      if (!folder.dsf) {
+        return res.status(400).json({
+          success: false,
+          message: "Aucun DSF trouvé pour ce dossier. Veuillez générer le DSF d'abord.",
+        });
+      }
+
+      // Authenticate with DGI
+      const { DGIService } = await import("../services/dgi.service");
+      const dgiService = new DGIService();
+      const authToken = await dgiService.authenticateWithDGI(
+        dgiConfig.username,
+        dgiConfig.password
+      );
+
+      // Create declaration process
+      const processResult = await dgiService.createProcess(
+        declarationYear || folder.fiscalYear.toString(),
+        declarationType || "DSF",
+        authToken
+      );
+
+      if (!processResult.status.includes("OK")) {
+        return res.status(400).json({
+          success: false,
+          message: "Erreur lors de la création du processus de déclaration",
+        });
+      }
+
+      // Prepare etatsFinanciers data
+      const declaration = await prisma.taxDeclaration.findFirst({
+        where: {
+          folderId,
+          type: "DSF",
+          period: folder.fiscalYear.toString(),
+        },
+        include: {
+          folder: {
+            include: {
+              client: true,
+              dsf: true,
+            },
+          },
+        },
+      });
+
+      let taxDeclaration;
+      if (declaration) {
+        taxDeclaration = declaration;
+      } else {
+        // Create declaration record
+        taxDeclaration = await prisma.taxDeclaration.create({
+          data: {
+            folderId,
+            type: "DSF",
+            period: folder.fiscalYear.toString(),
+            dueDate: new Date(),
+            status: "PENDING",
+            niuNumber: dgiConfig.username,
+            apiPassword: dgiConfig.password,
+          },
+          include: {
+            folder: {
+              include: {
+                client: true,
+                dsf: true,
+              },
+            },
+          },
+        });
+      }
+
+      const etatsFinanciersData = dgiService.prepareEtatsFinanciersData(taxDeclaration as any);
+
+      // Submit etatsFinanciers
+      const submitResult = await dgiService.submitEtatsFinanciers(
+        processResult.id,
+        etatsFinanciersData,
+        authToken
+      );
+
+      if (!submitResult.success) {
+        return res.status(400).json({
+          success: false,
+          message: submitResult.message,
+          action: submitResult.action,
+        });
+      }
+
+      // Update declaration status
+      await prisma.taxDeclaration.update({
+        where: { id: taxDeclaration.id },
+        data: {
+          status: "DECLARED",
+          filedAt: new Date(),
+          dsfId: processResult.id,
+        },
+      });
+
+      res.json({
+        success: true,
+        data: {
+          declarationId: taxDeclaration.id,
+          processId: processResult.id,
+          submittedAt: new Date().toISOString(),
+          status: "DECLARED",
+          fiscalYear: folder.fiscalYear,
+        },
+        message: submitResult.message,
+        action: submitResult.action,
+      });
+    } catch (error) {
+      console.error("Error submitting DSF declaration:", error);
+      res.status(500).json({
+        success: false,
+        message: "Erreur lors de la soumission de la déclaration DSF",
       });
     }
   }
